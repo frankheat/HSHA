@@ -1,0 +1,43 @@
+# HSHA — HTTP Security Header Analyzer — Basic configuration
+#
+# Checks the 11 core OWASP security headers.
+# Use this profile for a standard security review.
+#
+# Usage:
+#   python check_headers.py response.txt                         (loaded automatically)
+#   python check_headers.py response.txt --config config_basic.yaml
+
+headers:
+
+  # --- HSTS tuning ---
+  Strict-Transport-Security:
+    min_max_age: 31536000
+    require_include_subdomains: true
+
+  # --- Headers not in scope for this profile ---
+  Permissions-Policy:
+    skip: true
+  X-DNS-Prefetch-Control:
+    skip: true
+  X-XSS-Protection:
+    skip: true
+  Expect-CT:
+    skip: true
+  Origin-Agent-Cluster:
+    skip: true
+  Access-Control-Allow-Origin:
+    skip: true
+  Access-Control-Allow-Credentials:
+    skip: true
+  Service-Worker-Allowed:
+    skip: true
+  Content-Disposition:
+    skip: true
+  Pragma:
+    skip: true
+  Expires:
+    skip: true
+  ETag:
+    skip: true
+  X-Download-Options:
+    skip: true

@@ -1,0 +1,16 @@
+# HSHA — HTTP Security Header Analyzer — Extended configuration
+#
+# Checks all 22+ security headers including deprecated, legacy,
+# and browser-specific ones.
+# Use this profile for a comprehensive security review.
+#
+# Usage:
+#   python check_headers.py response.txt --config config_extended.yaml
+
+headers:
+
+  # --- HSTS tuning ---
+  Strict-Transport-Security:
+    min_max_age: 63072000      # OWASP recommended: 2 years
+    require_include_subdomains: true
+    require_preload: true

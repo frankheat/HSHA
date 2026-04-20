@@ -1,0 +1,15 @@
+{
+  "name": "hsha",
+  "version": "1.0.0",
+  "description": "HTTP Security Header Analyzer — OWASP-based CLI tool",
+  "main": "csp_wrapper.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["security", "http", "headers", "owasp", "csp"],
+  "author": "frankheat",
+  "license": "MIT",
+  "dependencies": {
+    "csp_evaluator": "github:google/csp-evaluator"
+  }
+}
