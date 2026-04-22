@@ -293,23 +293,22 @@ def _check_style_src(csp: _CSPParser, findings: list[Finding]):
 def _check_object_src(csp: _CSPParser, findings: list[Finding]):
     sources = csp.effective('object-src')
     if sources is None:
-        if 'default-src' not in csp.directives:
-            findings.append(Finding(
-                header='Content-Security-Policy',
-                severity=Severity.HIGH,
-                title="Missing object-src directive",
-                description="Without object-src, plugins (Flash, Java applets) can load from any source.",
-                recommendation="Add 'object-src 'none'' to block all plugins.",
-            ))
+        findings.append(Finding(
+            header='Content-Security-Policy',
+            severity=Severity.HIGH,
+            title="Missing object-src directive",
+            description="Without object-src or default-src, plugins (Flash, Java applets) can load from any source.",
+            recommendation="Add 'object-src 'none'' to block all plugins.",
+        ))
     elif "'none'" not in sources:
-        if any(s in sources for s in ('*', 'http:', 'https:')):
-            findings.append(Finding(
-                header='Content-Security-Policy',
-                severity=Severity.HIGH,
-                title="Permissive object-src",
-                description="object-src is too broad. Plugins can be exploited for XSS.",
-                recommendation="Set 'object-src 'none''.",
-            ))
+        findings.append(Finding(
+            header='Content-Security-Policy',
+            severity=Severity.HIGH,
+            title="Permissive object-src",
+            description="Any object-src value other than 'none' allows plugin loading. "
+                        "Same-origin and CDN-hosted plugins can be exploited for XSS.",
+            recommendation="Set 'object-src 'none''.",
+        ))
 
 
 def _check_base_uri(csp: _CSPParser, findings: list[Finding]):
@@ -324,12 +323,13 @@ def _check_base_uri(csp: _CSPParser, findings: list[Finding]):
         ))
     else:
         sources = csp.directives['base-uri']
-        if "'unsafe-inline'" in sources or '*' in sources:
+        if any(s in sources for s in ('*', 'http:', 'https:')):
             findings.append(Finding(
                 header='Content-Security-Policy',
                 severity=Severity.HIGH,
                 title="Permissive base-uri",
-                description="base-uri should be restricted to 'self' or 'none'.",
+                description="base-uri allows any URL as the base, enabling <base href> injection to redirect "
+                            "relative URLs to an attacker-controlled origin.",
                 recommendation="Set 'base-uri 'self'' or 'base-uri 'none''.",
             ))
 

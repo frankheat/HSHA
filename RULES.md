@@ -78,14 +78,14 @@ CSP is evaluated by the built-in Python engine.
 | Condition | Severity | Rationale |
 |---|---|---|
 | Missing (no default-src either) | HIGH | Without restriction, plugins (Flash, Java) load from any origin |
-| Present but not `'none'`, with `*` or `http:` | HIGH | Overly permissive; plugins can be exploited for XSS |
+| Present but not `'none'` | HIGH | Any allowed origin for plugins is a risk; same-origin and CDN-hosted plugins can be exploited for XSS |
 
 #### base-uri
 
 | Condition | Severity | Rationale |
 |---|---|---|
 | Missing | MEDIUM | Attackers can inject `<base href>` to redirect relative URLs |
-| Present with `'unsafe-inline'` or `*` | HIGH | base-uri should be `'none'` or `'self'` |
+| Present with `*`, `http:` or `https:` | HIGH | Allows any URL as base, enabling `<base href>` injection to an attacker-controlled origin |
 
 #### frame-ancestors
 
