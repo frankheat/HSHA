@@ -43,10 +43,20 @@ The following headers are checked by default when using `profiles/basic.yaml`.
 
 CSP is evaluated by the built-in Python engine.
 
+#### Syntax / structural checks
+
+| Condition | Severity | Rationale |
+|---|---|---|
+| Both `script-src` and `default-src` absent | HIGH | No restrictions on script loading whatsoever |
+| A directive name appears as a value of another directive | HIGH | Almost certainly a missing `;`; the misplaced directive is silently ignored |
+| CSP keyword without single quotes (e.g. `unsafe-inline` instead of `'unsafe-inline'`) | HIGH | Browser treats it as a hostname, not a keyword — protection is silently not applied |
+| Nonce/hash value without single quotes (e.g. `nonce-abc` instead of `'nonce-abc'`) | HIGH | Same as above — nonce/hash is ignored by the browser |
+
 #### script-src (or default-src as fallback)
 
 | Condition | Severity | Rationale |
 |---|---|---|
+| `'strict-dynamic'` without nonce or hash | MEDIUM | `strict-dynamic` only takes effect with a nonce or hash; alone it blocks all scripts |
 | `'unsafe-inline'` present (without nonce+strict-dynamic) | HIGH | Allows execution of arbitrary inline scripts, defeating XSS protection |
 | `'unsafe-eval'` present | HIGH | Allows code execution via `eval()`, `Function()`, `setTimeout(string)` |
 | `'unsafe-hashes'` present | MEDIUM | Enables hashing of event handler attributes; weaker than avoiding inline handlers |
@@ -91,7 +101,7 @@ CSP is evaluated by the built-in Python engine.
 | Missing | MEDIUM | Resource types without a specific directive are unrestricted |
 | Present with `*` or `http:` | HIGH | Too broad; applies to all uncovered resource types |
 
-#### form-action *(Python engine only)*
+#### form-action
 
 | Condition | Severity | Rationale |
 |---|---|---|
@@ -102,7 +112,7 @@ CSP is evaluated by the built-in Python engine.
 | Condition | Severity | Rationale |
 |---|---|---|
 | `upgrade-insecure-requests` missing | INFO | Upgrading HTTP sub-resources to HTTPS is recommended |
-| Deprecated directives (`reflected-xss`, `referrer`, `block-all-mixed-content`) | INFO | These directives have been removed from the spec |
+| Deprecated directives (`reflected-xss`, `referrer`, `block-all-mixed-content`, `prefetch-src`) | INFO | These directives have been removed from the spec or are ignored by browsers |
 
 ---
 

@@ -36,6 +36,24 @@ _BYPASS_BASE_DOMAINS = {
 
 _BROAD_WILDCARDS = {'*.com', '*.net', '*.org', '*.edu', '*.gov', '*.io', '*.co'}
 
+# CSP directive names — used to detect missing semicolons
+_KNOWN_DIRECTIVES = {
+    'default-src', 'script-src', 'script-src-elem', 'script-src-attr',
+    'style-src', 'style-src-elem', 'style-src-attr', 'img-src', 'font-src',
+    'connect-src', 'media-src', 'object-src', 'frame-src', 'worker-src',
+    'manifest-src', 'prefetch-src', 'navigate-to', 'base-uri', 'form-action',
+    'frame-ancestors', 'sandbox', 'report-uri', 'report-to',
+    'upgrade-insecure-requests', 'block-all-mixed-content',
+    'require-trusted-types-for', 'trusted-types',
+    'reflected-xss', 'referrer', 'disown-opener',
+}
+
+# Keywords that must be surrounded by single quotes to be valid CSP keywords
+_UNQUOTED_KEYWORDS = {
+    'unsafe-inline', 'unsafe-eval', 'unsafe-hashes',
+    'strict-dynamic', 'none', 'self', 'report-sample',
+}
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -67,6 +85,9 @@ def _python_evaluate(csp_value: str) -> list[Finding]:
     findings: list[Finding] = []
     csp = _CSPParser(csp_value)
 
+    _check_missing_semicolon(csp, findings)
+    _check_invalid_keyword(csp, findings)
+    _check_missing_script_src(csp, findings)
     _check_script_src(csp, findings)
     _check_style_src(csp, findings)
     _check_object_src(csp, findings)
@@ -76,6 +97,57 @@ def _python_evaluate(csp_value: str) -> list[Finding]:
     _check_misc(csp, findings)
 
     return findings
+
+
+def _check_missing_semicolon(csp: _CSPParser, findings: list[Finding]):
+    for directive, values in csp.directives.items():
+        for value in values:
+            if value in _KNOWN_DIRECTIVES:
+                findings.append(Finding(
+                    header='Content-Security-Policy',
+                    severity=Severity.HIGH,
+                    title=f"Possible missing semicolon: '{value}' in '{directive}'",
+                    description=f"'{value}' is a known CSP directive but appears as a value of '{directive}'. "
+                                "A missing ';' causes it to be silently ignored.",
+                    recommendation=f"Separate '{directive}' and '{value}' with a semicolon.",
+                ))
+
+
+def _check_invalid_keyword(csp: _CSPParser, findings: list[Finding]):
+    for directive, values in csp.directives.items():
+        for value in values:
+            if value in _UNQUOTED_KEYWORDS:
+                findings.append(Finding(
+                    header='Content-Security-Policy',
+                    severity=Severity.HIGH,
+                    title=f"Invalid keyword '{value}' in '{directive}' (missing single quotes)",
+                    description=f"'{value}' without single quotes is treated as a hostname, not a CSP keyword. "
+                                "The intended restriction is silently not applied.",
+                    recommendation=f"Replace '{value}' with \"'{value}'\" (surround with single quotes).",
+                ))
+            elif (value.startswith('nonce-') or
+                  value.startswith('sha256-') or
+                  value.startswith('sha384-') or
+                  value.startswith('sha512-')):
+                findings.append(Finding(
+                    header='Content-Security-Policy',
+                    severity=Severity.HIGH,
+                    title=f"Unquoted nonce/hash '{value}' in '{directive}'",
+                    description="Nonces and hashes must be surrounded by single quotes to be recognized as CSP keywords. "
+                                "Without quotes the browser treats the value as a hostname.",
+                    recommendation=f"Replace '{value}' with \"'{value}'\" (surround with single quotes).",
+                ))
+
+
+def _check_missing_script_src(csp: _CSPParser, findings: list[Finding]):
+    if 'script-src' not in csp.directives and 'default-src' not in csp.directives:
+        findings.append(Finding(
+            header='Content-Security-Policy',
+            severity=Severity.HIGH,
+            title="Missing script-src and default-src",
+            description="Without script-src or default-src the CSP places no restrictions on script loading.",
+            recommendation="Add at minimum: script-src 'none' or default-src 'none'.",
+        ))
 
 
 def _extract_hostname(source: str) -> tuple[str, bool]:
@@ -96,6 +168,16 @@ def _check_script_src(csp: _CSPParser, findings: list[Finding]):
     has_nonce = any(s.startswith("'nonce-") for s in sources)
     has_hash = any(re.match(r"'sha(256|384|512)-", s) for s in sources)
     has_strict_dynamic = "'strict-dynamic'" in sources
+
+    if has_strict_dynamic and not has_nonce and not has_hash:
+        findings.append(Finding(
+            header='Content-Security-Policy',
+            severity=Severity.MEDIUM,
+            title="script-src: 'strict-dynamic' without nonce or hash",
+            description="'strict-dynamic' takes effect only when paired with a nonce or hash. "
+                        "Without them it blocks all scripts.",
+            recommendation="Add a per-request nonce (e.g. 'nonce-<random>') or a hash to script-src.",
+        ))
 
     if "'unsafe-inline'" in sources:
         if not (has_strict_dynamic and (has_nonce or has_hash)):
@@ -299,6 +381,7 @@ def _check_misc(csp: _CSPParser, findings: list[Finding]):
         'reflected-xss': "Deprecated — use CSP instead.",
         'referrer': "Deprecated — use Referrer-Policy header.",
         'block-all-mixed-content': "Deprecated — use upgrade-insecure-requests.",
+        'prefetch-src': "Deprecated — removed from the CSP spec; browsers may ignore it.",
     }
     for directive, msg in deprecated.items():
         if directive in csp.directives:
