@@ -152,8 +152,8 @@ def _check_missing_script_src(csp: _CSPParser, findings: list[Finding]):
 
 def _extract_hostname(source: str) -> tuple[str, bool]:
     """Return (hostname, is_wildcard)."""
-    is_wildcard = source.startswith('*.')
     host = re.sub(r'^https?://', '', source)
+    is_wildcard = host.startswith('*.')
     host = host.split('/')[0].split(':')[0]
     if host.startswith('*.'):
         host = host[2:]
