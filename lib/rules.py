@@ -61,7 +61,6 @@ def _parse_severity(value: str | None, default: Severity) -> Severity:
 def analyze_headers(
     raw_headers: dict[str, str],
     config: AppConfig,
-    use_nodejs_csp: bool = True,
 ) -> list[HeaderResult]:
     results: list[HeaderResult] = []
 
@@ -96,7 +95,7 @@ def analyze_headers(
                 recommendation=_MISSING_RECS.get(key, f"Set a valid value for {canonical}."),
             ))
         else:
-            findings.extend(_validate_value(key, canonical, value, override, use_nodejs_csp))
+            findings.extend(_validate_value(key, canonical, value, override))
 
         results.append(HeaderResult(
             name=key,
@@ -161,7 +160,6 @@ def _validate_value(
     canonical: str,
     value: str,
     override: HeaderOverride,
-    use_nodejs_csp: bool,
 ) -> list[Finding]:
     # Config-level value assertions take precedence over built-in checks
     if override.expected_value:
@@ -200,7 +198,7 @@ def _validate_value(
 
     # CSP has its own dedicated evaluator
     if key == 'content-security-policy':
-        return evaluate_csp(value, use_nodejs=use_nodejs_csp)
+        return evaluate_csp(value)
 
     checker = _CHECKERS.get(key)
     if checker:

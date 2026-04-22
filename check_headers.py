@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 HSHA — HTTP Security Header Analyzer
-OWASP-based checker with optional Google CSP Evaluator integration.
+OWASP-based checker.
 
 Usage:
     python check_headers.py response.txt
@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 
 from lib.config import load_config
-from lib.csp_evaluator import get_csp_engine
 from lib.models import Severity
 from lib.parser import parse_http_response
 from lib.reporter import console, report
@@ -50,11 +49,6 @@ def main() -> int:
         default='simple',
         help="simple: pass/fail only (default); severity: risk levels per finding",
     )
-    parser.add_argument(
-        '--no-nodejs-csp',
-        action='store_true',
-        help="Skip Google CSP Evaluator via Node.js; use built-in Python evaluator only",
-    )
     args = parser.parse_args()
 
     # Read response
@@ -69,7 +63,7 @@ def main() -> int:
 
     raw_headers = parse_http_response(content)
     config = load_config(args.config)
-    results = analyze_headers(raw_headers, config, use_nodejs_csp=not args.no_nodejs_csp)
+    results = analyze_headers(raw_headers, config)
 
     if args.format == 'json':
         output = [
@@ -92,9 +86,9 @@ def main() -> int:
         ]
         print(json.dumps(output, indent=2))
     elif args.format == 'list':
-        report(results, mode='list', csp_engine=get_csp_engine())
+        report(results, mode='list')
     else:
-        report(results, mode=args.mode, csp_engine=get_csp_engine())
+        report(results, mode=args.mode)
 
     worst = max(
         (f.severity for r in results for f in r.findings),

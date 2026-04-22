@@ -1,14 +1,7 @@
 """
-CSP evaluation engine.
-
-Primary path: delegates to @google/csp-evaluator via Node.js (csp_wrapper.js).
-Fallback: built-in Python evaluator implementing the same key checks.
+CSP evaluation engine (built-in Python implementation).
 """
-import json
 import re
-import shutil
-import subprocess
-from pathlib import Path
 from typing import Optional
 
 from .models import Finding, Severity
@@ -43,80 +36,17 @@ _BYPASS_BASE_DOMAINS = {
 
 _BROAD_WILDCARDS = {'*.com', '*.net', '*.org', '*.edu', '*.gov', '*.io', '*.co'}
 
-_WRAPPER = Path(__file__).parent.parent / 'csp_wrapper.js'
-
-_csp_engine_used: str = ""
-
-
-def get_csp_engine() -> str:
-    """Returns which CSP engine was used in the last evaluate_csp() call."""
-    return _csp_engine_used
-
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
-def evaluate_csp(csp_value: str, use_nodejs: bool = True) -> list[Finding]:
-    global _csp_engine_used
-    if use_nodejs:
-        result = _try_nodejs(csp_value)
-        if result is not None:
-            _csp_engine_used = "Google CSP Evaluator (Node.js)"
-            return result
-    _csp_engine_used = "built-in Python evaluator"
+def evaluate_csp(csp_value: str) -> list[Finding]:
     return _python_evaluate(csp_value)
 
 
 # ---------------------------------------------------------------------------
-# Node.js path
-# ---------------------------------------------------------------------------
-
-def _try_nodejs(csp_value: str) -> Optional[list[Finding]]:
-    if not shutil.which('node') or not _WRAPPER.exists():
-        return None
-    try:
-        proc = subprocess.run(
-            ['node', str(_WRAPPER), csp_value],
-            capture_output=True, text=True, timeout=15,
-        )
-        if proc.returncode == 0:
-            return _parse_nodejs_output(json.loads(proc.stdout))
-    except Exception:
-        pass
-    return None
-
-
-def _parse_nodejs_output(data: list) -> list[Finding]:
-    # Google CSP Evaluator severity constants: 0=ok,1=info,2=low,3=medium,10=high,100=critical
-    sev_map = {
-        0: Severity.OK, 1: Severity.INFO, 2: Severity.LOW,
-        3: Severity.MEDIUM, 10: Severity.HIGH, 100: Severity.CRITICAL,
-    }
-    findings = []
-    for item in data:
-        sev = sev_map.get(item.get('severity', 1), Severity.MEDIUM)
-        directive = item.get('directive', '')
-        type_name = item.get('type', '')
-        description = item.get('description', '')
-        # Build title from description (human-readable); add directive and type as context
-        title_parts = []
-        if directive:
-            title_parts.append(f"({directive})")
-        if type_name:
-            title_parts.append(type_name)
-        title = " ".join(title_parts) if title_parts else "CSP Issue"
-        findings.append(Finding(
-            header='Content-Security-Policy',
-            severity=sev,
-            title=title,
-            description=description,
-        ))
-    return findings
-
-
-# ---------------------------------------------------------------------------
-# Python fallback evaluator
+# Python evaluator
 # ---------------------------------------------------------------------------
 
 class _CSPParser:

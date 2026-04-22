@@ -41,7 +41,7 @@ The following headers are checked by default when using `profiles/basic.yaml`.
 
 **Required:** yes — **Severity if missing:** HIGH
 
-CSP is evaluated by Google's CSP Evaluator (Node.js) when available, otherwise by the built-in Python engine. The checks below apply to the Python engine. Google's engine performs additional bypass-domain analysis.
+CSP is evaluated by the built-in Python engine.
 
 #### script-src (or default-src as fallback)
 

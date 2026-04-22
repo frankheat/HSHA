@@ -15,12 +15,11 @@ console = Console()
 def report(
     results: list[HeaderResult],
     mode: str = 'severity',   # 'severity' | 'simple'
-    csp_engine: str = "",
 ) -> None:
     if mode == 'list':
         _print_list(results)
         return
-    _print_banner(csp_engine)
+    _print_banner()
     if mode == 'simple':
         _print_table_simple(results)
         _print_findings_simple(results)
@@ -43,14 +42,10 @@ _CONTEXT_NOTE = (
 )
 
 
-def _print_banner(csp_engine: str = ""):
-    if csp_engine:
-        csp_line = f"\n[dim]CSP engine: {csp_engine}[/dim]"
-    else:
-        csp_line = "\n[dim]CSP engine: n/a (no CSP header found)[/dim]"
+def _print_banner():
     console.print()
     console.print(Panel.fit(
-        "[bold white]HSHA[/bold white] [dim]— HTTP Security Header Analyzer — OWASP-based[/dim]" + csp_line,
+        "[bold white]HSHA[/bold white] [dim]— HTTP Security Header Analyzer — OWASP-based[/dim]",
         border_style="bright_blue",
     ))
     console.print(_CONTEXT_NOTE)

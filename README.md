@@ -1,6 +1,6 @@
 # HSHA — HTTP Security Header Analyzer
 
-A CLI tool that parses raw HTTP responses and evaluates security headers against OWASP guidelines. Produces color-coded findings with severity levels and optional integration with [Google's CSP Evaluator](https://github.com/google/csp-evaluator).
+A CLI tool that parses raw HTTP responses and evaluates security headers against OWASP guidelines. Produces color-coded findings with severity levels.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -12,7 +12,7 @@ A CLI tool that parses raw HTTP responses and evaluates security headers against
 - Two built-in profiles: **basic** (11 headers) and **extended** (24+ headers)
 - Three output formats: rich table (`text`), plain list (`list`), machine-readable (`json`)
 - Two display modes: `severity` (CRITICAL/HIGH/MEDIUM/LOW/INFO) and `simple` (PASS/FAIL)
-- CSP deep analysis via Google's CSP Evaluator (Node.js) with Python fallback
+- CSP deep analysis via built-in Python evaluator
 - Fully customizable via YAML config: override severities, mark headers as required/optional, assert expected values
 - Full documentation of every check, condition, and severity in [`RULES.md`](RULES.md)
 
@@ -29,20 +29,6 @@ cd HSHA
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-### Optional: Google CSP Evaluator (Node.js)
-
-For more accurate CSP analysis, install the Google CSP Evaluator. Requires Node.js 14+.
-
-```bash
-npm install github:google/csp-evaluator
-```
-
-When available, the tool uses it automatically. The banner will show which engine is active. To force the built-in Python evaluator:
-
-```bash
-python check_headers.py response.txt --no-nodejs-csp
 ```
 
 ---
@@ -213,7 +199,6 @@ lib/
   config.py            # YAML config loader
   reporter.py          # Output formatting
   models.py            # Data types
-csp_wrapper.js         # Node.js wrapper for Google CSP Evaluator
 profiles/
   basic.yaml           # Basic profile (default)
   extended.yaml        # Extended profile
