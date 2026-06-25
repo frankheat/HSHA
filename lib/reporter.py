@@ -224,4 +224,4 @@ def _print_list(results: list[HeaderResult]):
     console.print("The following headers are missing or misconfigured:")
     console.print()
     for r in failed:
-        console.print(f"  {r.canonical_name}")
+        console.print(r.canonical_name)
