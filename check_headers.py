@@ -62,6 +62,9 @@ def main() -> int:
         content = path.read_text(encoding='utf-8', errors='replace')
 
     raw_headers = parse_http_response(content)
+    if args.config and not Path(args.config).exists():
+        console.print(f"[red]Error: config file not found: {args.config}[/red]")
+        return 2
     config = load_config(args.config)
     results = analyze_headers(raw_headers, config)
 
