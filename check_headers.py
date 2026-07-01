@@ -35,7 +35,7 @@ def main() -> int:
         '--config', '-c',
         default=None,
         metavar='FILE',
-        help="YAML config for custom rules (default: config.yaml in current dir)",
+        help="YAML config for custom rules (default: profiles/basic.yaml)",
     )
     parser.add_argument(
         '--format', '-f',
