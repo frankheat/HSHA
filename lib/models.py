@@ -5,15 +5,17 @@ from typing import Optional
 
 class Severity(IntEnum):
     OK = 0
-    INFO = 1
-    LOW = 2
-    MEDIUM = 3
-    HIGH = 4
-    CRITICAL = 5
+    NOTE = 1      # informational note, not an issue (e.g. duplicate header)
+    INFO = 2
+    LOW = 3
+    MEDIUM = 4
+    HIGH = 5
+    CRITICAL = 6
 
 
 SEVERITY_COLORS = {
     Severity.OK: "green",
+    Severity.NOTE: "blue",
     Severity.INFO: "cyan",
     Severity.LOW: "yellow",
     Severity.MEDIUM: "dark_orange",
@@ -23,6 +25,7 @@ SEVERITY_COLORS = {
 
 SEVERITY_LABELS = {
     Severity.OK: "OK",
+    Severity.NOTE: "NOTE",
     Severity.INFO: "INFO",
     Severity.LOW: "LOW",
     Severity.MEDIUM: "MEDIUM",
@@ -32,6 +35,7 @@ SEVERITY_LABELS = {
 
 SEVERITY_SYMBOLS = {
     Severity.OK: "✓",
+    Severity.NOTE: "•",
     Severity.INFO: "ℹ",
     Severity.LOW: "⚠",
     Severity.MEDIUM: "⚠",

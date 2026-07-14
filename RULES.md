@@ -13,9 +13,10 @@ This document describes every check implemented by HSHA — what triggers a find
 | **MEDIUM** | Misconfiguration that weakens the security posture |
 | **LOW** | Minor weakness or deprecated configuration |
 | **INFO** | Informational — worth reviewing but not necessarily a problem |
+| **NOTE** | Informational note only (e.g. duplicate header) — never counted as a failure |
 | **OK** | Correctly configured |
 
-The tool exits with code `1` if at least one finding is LOW or above, and `0` if all findings are INFO or OK.
+The tool exits with code `1` if at least one finding is LOW or above, and `0` if all findings are INFO, NOTE or OK. NOTE findings never appear in `--format list` and never mark a header as FAIL.
 
 ---
 
@@ -28,6 +29,23 @@ These checks apply to every header before any value-specific logic runs.
 | Header absent + required | Per-header default | Missing required security header |
 | Header absent + optional | INFO | Absent but not mandatory in current profile |
 | Header present, value is empty | **HIGH** | Browsers silently ignore headers with no value |
+| Header sent more than once | **NOTE** | Duplicates usually come from a proxy/CDN adding its own copy; the effective value is resolved as described below and checks run against it |
+
+### Duplicate headers
+
+When a header appears multiple times in the response, HSHA resolves the
+effective value the same way browsers do, then evaluates that value:
+
+| Strategy | Headers | Behavior |
+|---|---|---|
+| Identical values | any | Collapsed to the single value |
+| First wins | default (e.g. `Strict-Transport-Security`, RFC 6797 §8.1) | First occurrence is evaluated |
+| Last wins | `Referrer-Policy` | Browsers honor the last valid value |
+| Join | `Content-Security-Policy`, `Cache-Control`, `Clear-Site-Data`, `Permissions-Policy`, `Pragma` | Occurrences combine into a single list/policy set |
+| Strictest | `X-Frame-Options` | Conflicting values make browsers block framing — evaluated as `DENY` |
+
+The NOTE finding always reports the original values, the effective value
+chosen, and why.
 
 ---
 

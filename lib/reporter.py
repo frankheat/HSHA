@@ -61,7 +61,7 @@ def _val_display(r: HeaderResult) -> str | Text:
 
 
 def _is_issue(r: HeaderResult) -> bool:
-    return any(f.severity > Severity.OK for f in r.findings)
+    return any(f.severity > Severity.NOTE for f in r.findings)
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ def _print_summary_severity(results: list[HeaderResult]):
     worst_color = SEVERITY_COLORS[worst]
 
     parts = []
-    for sev in [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW, Severity.INFO]:
+    for sev in [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW, Severity.INFO, Severity.NOTE]:
         if counts[sev]:
             c = SEVERITY_COLORS[sev]
             parts.append(f"[{c}]{counts[sev]} {SEVERITY_LABELS[sev]}[/{c}]")
@@ -167,30 +167,51 @@ def _print_table_simple(results: list[HeaderResult]):
 
 
 def _print_findings_simple(results: list[HeaderResult]):
-    issues = [(r, [f for f in r.findings if f.severity > Severity.OK]) for r in results]
+    issues = [(r, [f for f in r.findings if f.severity > Severity.NOTE]) for r in results]
     issues = [(r, fs) for r, fs in issues if fs]
+    notes = [(r, [f for f in r.findings if f.severity == Severity.NOTE]) for r in results]
+    notes = [(r, fs) for r, fs in notes if fs]
 
-    if not issues:
+    if not issues and not notes:
         console.print("[green]No issues found.[/green]")
         console.print()
         return
 
-    console.print("[bold]Issues[/bold]")
-    console.print()
-
-    for result, findings in issues:
-        console.print(f"[bold underline]{result.canonical_name}[/bold underline]")
-        if result.value:
-            console.print(f"  [dim]Value:[/dim] {result.value}")
-
-        for f in findings:
-            console.print(f"  [red]✗[/red] {f.title}")
-            if f.description:
-                console.print(f"      [dim]{f.description}[/dim]")
-            if f.recommendation:
-                console.print(f"      [italic]→ {f.recommendation}[/italic]")
-
+    if issues:
+        console.print("[bold]Issues[/bold]")
         console.print()
+
+        for result, findings in issues:
+            console.print(f"[bold underline]{result.canonical_name}[/bold underline]")
+            if result.value:
+                console.print(f"  [dim]Value:[/dim] {result.value}")
+
+            for f in findings:
+                console.print(f"  [red]✗[/red] {f.title}")
+                if f.description:
+                    console.print(f"      [dim]{f.description}[/dim]")
+                if f.recommendation:
+                    console.print(f"      [italic]→ {f.recommendation}[/italic]")
+
+            console.print()
+
+    if notes:
+        console.print("[bold]Notes[/bold] [dim](informational, not counted as failures)[/dim]")
+        console.print()
+
+        for result, findings in notes:
+            console.print(f"[bold underline]{result.canonical_name}[/bold underline]")
+            if result.value:
+                console.print(f"  [dim]Value:[/dim] {result.value}")
+
+            for f in findings:
+                console.print(f"  [blue]•[/blue] {f.title}")
+                if f.description:
+                    console.print(f"      [dim]{f.description}[/dim]")
+                if f.recommendation:
+                    console.print(f"      [italic]→ {f.recommendation}[/italic]")
+
+            console.print()
 
 
 def _print_summary_simple(results: list[HeaderResult]):

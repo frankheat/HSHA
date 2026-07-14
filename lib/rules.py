@@ -43,6 +43,69 @@ SECURITY_HEADERS: list[tuple[str, str, bool, Severity]] = [
 
 _DEFAULT_KEYS = {k for k, *_ in SECURITY_HEADERS}
 
+# ---------------------------------------------------------------------------
+# Duplicate-header resolution, mirroring real browser behavior:
+#   first     — first occurrence wins (default; e.g. HSTS per RFC 6797 §8.1)
+#   last      — last valid occurrence wins (Referrer-Policy per W3C spec)
+#   join      — occurrences combine into one list/policy set (RFC list headers;
+#               for CSP, multiple headers are all enforced, equivalent to
+#               joining with ',')
+#   strictest — conflicting values make browsers block framing (X-Frame-Options)
+# ---------------------------------------------------------------------------
+_DUPLICATE_STRATEGIES: dict[str, str] = {
+    'referrer-policy':         'last',
+    'x-frame-options':         'strictest',
+    'content-security-policy': 'join',
+    'cache-control':           'join',
+    'clear-site-data':         'join',
+    'permissions-policy':      'join',
+    'pragma':                  'join',
+}
+
+
+def _resolve_duplicates(
+    key: str,
+    canonical: str,
+    values: list[str],
+) -> tuple[str, Optional[Finding]]:
+    """
+    Collapse multiple occurrences of a header into the value browsers
+    would actually apply. Returns (effective_value, note_finding);
+    note_finding is None when the header appears only once.
+    """
+    if len(values) == 1:
+        return values[0], None
+
+    if len({v.strip().lower() for v in values}) == 1:
+        effective = values[0]
+        behavior = "the duplicate values are identical"
+    else:
+        strategy = _DUPLICATE_STRATEGIES.get(key, 'first')
+        if strategy == 'join':
+            effective = ', '.join(values)
+            behavior = "browsers combine them into a single list"
+        elif strategy == 'last':
+            effective = values[-1]
+            behavior = "browsers honor the last valid value"
+        elif strategy == 'strictest':
+            effective = 'DENY'
+            behavior = "browsers block framing when the values conflict"
+        else:
+            effective = values[0]
+            behavior = "browsers honor the first value"
+
+    note = Finding(
+        header=canonical,
+        severity=Severity.NOTE,
+        title=f"{canonical}: header sent {len(values)} times",
+        description=(
+            f"Duplicate values: {'; '.join(values)}. "
+            f"Evaluated as '{effective}' because {behavior}."
+        ),
+        recommendation=f"Configure the server (and any proxy/CDN) to send {canonical} only once.",
+    )
+    return effective, note
+
 
 def _parse_severity(value: str | None, default: Severity) -> Severity:
     if not value:
@@ -59,7 +122,7 @@ def _parse_severity(value: str | None, default: Severity) -> Severity:
 # ---------------------------------------------------------------------------
 
 def analyze_headers(
-    raw_headers: dict[str, str],
+    raw_headers: dict[str, list[str]],
     config: AppConfig,
 ) -> list[HeaderResult]:
     results: list[HeaderResult] = []
@@ -68,7 +131,7 @@ def analyze_headers(
         override = get_override(config, key)
         if override.skip:
             continue
-        value = raw_headers.get(key)
+        occurrences = raw_headers.get(key)
 
         required = override.required if override.required is not None else default_required
         missing_sev = (
@@ -76,8 +139,9 @@ def analyze_headers(
         )
 
         findings: list[Finding] = []
+        value: Optional[str] = None
 
-        if value is None:
+        if occurrences is None:
             sev = missing_sev if required else Severity.INFO
             findings.append(Finding(
                 header=canonical,
@@ -86,16 +150,20 @@ def analyze_headers(
                 description=f"The {canonical} header is absent from the response.",
                 recommendation=_MISSING_RECS.get(key, f"Add the {canonical} header.") if required else "",
             ))
-        elif value.strip() == '':
-            findings.append(Finding(
-                header=canonical,
-                severity=Severity.HIGH,
-                title=f"{canonical}: present but empty",
-                description="A header with an empty value is silently ignored by browsers.",
-                recommendation=_MISSING_RECS.get(key, f"Set a valid value for {canonical}."),
-            ))
         else:
-            findings.extend(_validate_value(key, canonical, value, override))
+            value, dup_note = _resolve_duplicates(key, canonical, occurrences)
+            if dup_note:
+                findings.append(dup_note)
+            if value.strip() == '':
+                findings.append(Finding(
+                    header=canonical,
+                    severity=Severity.HIGH,
+                    title=f"{canonical}: present but empty",
+                    description="A header with an empty value is silently ignored by browsers.",
+                    recommendation=_MISSING_RECS.get(key, f"Set a valid value for {canonical}."),
+                ))
+            else:
+                findings.extend(_validate_value(key, canonical, value, override))
 
         results.append(HeaderResult(
             name=key,
@@ -109,10 +177,11 @@ def analyze_headers(
         if name in _DEFAULT_KEYS or override.skip:
             continue
         canonical = name
-        value = raw_headers.get(name)
+        occurrences = raw_headers.get(name)
         findings = []
+        value = None
 
-        if value is None:
+        if occurrences is None:
             if override.required or override.severity_if_missing:
                 sev = _parse_severity(override.severity_if_missing, Severity.MEDIUM)
                 findings.append(Finding(
@@ -122,6 +191,9 @@ def analyze_headers(
                     description="",
                 ))
         else:
+            value, dup_note = _resolve_duplicates(name, canonical, occurrences)
+            if dup_note:
+                findings.append(dup_note)
             if override.expected_value and value.strip().lower() != override.expected_value.lower():
                 findings.append(Finding(
                     header=canonical,

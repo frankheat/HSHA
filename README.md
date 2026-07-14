@@ -11,7 +11,8 @@ A CLI tool that parses raw HTTP responses and evaluates security headers against
 - Checks presence and correct configuration of security headers
 - Two built-in profiles: **basic** (11 headers) and **extended** (24+ headers)
 - Three output formats: rich table (`text`), plain list (`list`), machine-readable (`json`)
-- Two display modes: `severity` (CRITICAL/HIGH/MEDIUM/LOW/INFO) and `simple` (PASS/FAIL)
+- Two display modes: `severity` (CRITICAL/HIGH/MEDIUM/LOW/INFO/NOTE) and `simple` (PASS/FAIL)
+- Duplicate headers resolved per header the way browsers do (first wins, last wins, join, strictest), reported as informational NOTE findings
 - CSP deep analysis via built-in Python evaluator
 - Fully customizable via YAML config: override severities, mark headers as required/optional, assert expected values
 - Full documentation of every check, condition, and severity in [`RULES.md`](RULES.md)
@@ -92,7 +93,7 @@ Shows PASS/FAIL per header with a list of issues.
 
 ### `--mode severity`
 
-Shows severity level (CRITICAL / HIGH / MEDIUM / LOW / INFO / OK) for each header and finding.
+Shows severity level (CRITICAL / HIGH / MEDIUM / LOW / INFO / NOTE / OK) for each header and finding. NOTE is informational only (e.g. duplicate headers) and is never counted as a failure.
 
 ---
 
@@ -172,7 +173,7 @@ headers:
     expected_pattern: "^[0-9a-f-]{36}$"
 ```
 
-Valid severity values: `critical`, `high`, `medium`, `low`, `info`.
+Valid severity values: `critical`, `high`, `medium`, `low`, `info`, `note`.
 
 ---
 
@@ -180,7 +181,7 @@ Valid severity values: `critical`, `high`, `medium`, `low`, `info`.
 
 | Code | Meaning |
 |---|---|
-| `0` | No issues, or INFO only |
+| `0` | No issues, or INFO/NOTE only |
 | `1` | At least one LOW/MEDIUM/HIGH/CRITICAL finding |
 | `2` | File not found |
 
