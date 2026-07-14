@@ -212,7 +212,7 @@ def analyze_headers(
             elif override.severity_if_present:
                 findings.append(Finding(
                     header=canonical,
-                    severity=Severity[override.severity_if_present.upper()],
+                    severity=_parse_severity(override.severity_if_present, Severity.MEDIUM),
                     title=f"{canonical} is present (flagged by config)",
                     description="",
                 ))
@@ -297,7 +297,12 @@ def _check_hsts(value: str, extra: dict) -> list[Finding]:
         )]
 
     max_age = int(m.group(1))
-    min_age = int(extra.get('min_max_age', 31536000))
+    try:
+        min_age = int(extra.get('min_max_age', 31536000))
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"Invalid min_max_age '{extra.get('min_max_age')}' in config: must be an integer (seconds)."
+        )
 
     if max_age == 0:
         findings.append(Finding(

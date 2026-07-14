@@ -183,7 +183,7 @@ Valid severity values: `critical`, `high`, `medium`, `low`, `info`, `note`.
 |---|---|
 | `0` | No issues, or INFO/NOTE only |
 | `1` | At least one LOW/MEDIUM/HIGH/CRITICAL finding |
-| `2` | File not found |
+| `2` | File not found, or invalid config file |
 
 This makes the tool suitable for use in CI/CD pipelines.
 

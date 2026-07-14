@@ -65,8 +65,12 @@ def main() -> int:
     if args.config and not Path(args.config).exists():
         console.print(f"[red]Error: config file not found: {args.config}[/red]")
         return 2
-    config = load_config(args.config)
-    results = analyze_headers(raw_headers, config)
+    try:
+        config = load_config(args.config)
+        results = analyze_headers(raw_headers, config)
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        return 2
 
     if args.format == 'json':
         output = [

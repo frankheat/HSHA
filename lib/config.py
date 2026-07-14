@@ -1,3 +1,4 @@
+import re
 import yaml
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -55,12 +56,30 @@ def load_config(path: Optional[str] = None) -> AppConfig:
         path = str(default)
 
     with open(path) as f:
-        raw = yaml.safe_load(f) or {}
+        try:
+            raw = yaml.safe_load(f) or {}
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML in config file '{path}': {e}") from e
 
-    overrides = {
-        name.lower(): _parse_override(data or {})
-        for name, data in (raw.get('headers') or {}).items()
-    }
+    if not isinstance(raw, dict):
+        raise ValueError(f"Invalid config file '{path}': top level must be a YAML mapping.")
+    headers_section = raw.get('headers') or {}
+    if not isinstance(headers_section, dict):
+        raise ValueError(f"Invalid config file '{path}': 'headers' must be a mapping of header names.")
+
+    overrides: dict[str, HeaderOverride] = {}
+    for name, data in headers_section.items():
+        if data is not None and not isinstance(data, dict):
+            raise ValueError(
+                f"Invalid config for header '{name}': expected a mapping of options, got {type(data).__name__}."
+            )
+        override = _parse_override(data or {})
+        if override.expected_pattern:
+            try:
+                re.compile(override.expected_pattern)
+            except re.error as e:
+                raise ValueError(f"Invalid expected_pattern for header '{name}': {e}")
+        overrides[str(name).lower()] = override
     return AppConfig(overrides=overrides)
 
 
