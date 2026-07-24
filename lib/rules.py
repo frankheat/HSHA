@@ -556,7 +556,7 @@ def _check_cache_control(value: str, extra: dict) -> list[Finding]:
     elif 'no-cache' in lower:
         findings.append(Finding(
             header='Cache-Control',
-            severity=Severity.INFO,
+            severity=Severity.OK,
             title="Cache-Control: no-cache (revalidated before use)",
             description="Content may be stored but will be revalidated with the server.",
             recommendation="For sensitive endpoints prefer no-store.",
@@ -596,7 +596,7 @@ def _check_x_xss_protection(value: str, extra: dict) -> list[Finding]:
     if n == '0':
         return [Finding(
             header='X-XSS-Protection',
-            severity=Severity.INFO,
+            severity=Severity.OK,
             title="X-XSS-Protection: 0 (deprecated header, disabled correctly)",
             description="The header is deprecated. Setting it to 0 is correct for modern browsers.",
             recommendation="Consider removing this header entirely; rely on CSP instead.",
@@ -705,7 +705,7 @@ def _check_content_disposition(value: str, extra: dict) -> list[Finding]:
     if lower.startswith('inline'):
         return [Finding(
             header='Content-Disposition',
-            severity=Severity.INFO,
+            severity=Severity.OK,
             title="Content-Disposition: inline",
             description="Browser will attempt to render the content inline.",
             recommendation="Use 'attachment; filename=...' for file downloads to prevent inline execution.",
@@ -717,12 +717,11 @@ def _check_pragma(value: str, extra: dict) -> list[Finding]:
     if value.strip().lower() == 'no-cache':
         return [Finding(
             header='Pragma',
-            severity=Severity.INFO,
+            severity=Severity.OK,
             title="Pragma: no-cache (HTTP/1.0 legacy header)",
-            description="Pragma is a legacy HTTP/1.0 header superseded by Cache-Control.",
-            recommendation="Rely on Cache-Control for modern caching directives.",
+            description="Pragma is a legacy HTTP/1.0 header superseded by Cache-Control; its presence is harmless.",
         )]
-    return [Finding('Pragma', Severity.INFO, f"Pragma: '{value}' (legacy HTTP/1.0 header)")]
+    return [Finding('Pragma', Severity.OK, f"Pragma: '{value}' (legacy HTTP/1.0 header)")]
 
 
 def _check_expires(value: str, extra: dict) -> list[Finding]:
@@ -730,17 +729,16 @@ def _check_expires(value: str, extra: dict) -> list[Finding]:
         return [Finding('Expires', Severity.OK, "Expires: 0 (immediately expired, no caching)")]
     return [Finding(
         header='Expires',
-        severity=Severity.INFO,
+        severity=Severity.OK,
         title=f"Expires: '{value}' (legacy HTTP/1.0 caching header)",
-        description="Expires is a legacy header superseded by Cache-Control: max-age.",
-        recommendation="Prefer Cache-Control for cache lifetime control.",
+        description="Expires is a legacy header superseded by Cache-Control: max-age; its presence is harmless.",
     )]
 
 
 def _check_etag(value: str, extra: dict) -> list[Finding]:
     if value.strip().startswith('W/'):
-        return [Finding('ETag', Severity.INFO, "ETag: weak validator present")]
-    return [Finding('ETag', Severity.INFO, "ETag: strong validator present")]
+        return [Finding('ETag', Severity.OK, "ETag: weak validator present")]
+    return [Finding('ETag', Severity.OK, "ETag: strong validator present")]
 
 
 def _check_x_download_options(value: str, extra: dict) -> list[Finding]:
