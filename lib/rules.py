@@ -547,6 +547,15 @@ def _check_referrer_policy(value: str, extra: dict) -> list[Finding]:
     return [Finding('Referrer-Policy', Severity.INFO, f"Referrer-Policy: unrecognized value '{value}'")]
 
 
+# Standard Cache-Control directives (response context); token before any '='.
+_CACHE_CONTROL_DIRECTIVES = {
+    'max-age', 's-maxage', 'no-cache', 'no-store', 'no-transform',
+    'must-revalidate', 'proxy-revalidate', 'must-understand',
+    'private', 'public', 'immutable',
+    'stale-while-revalidate', 'stale-if-error',
+}
+
+
 def _check_cache_control(value: str, extra: dict) -> list[Finding]:
     findings: list[Finding] = []
     lower = value.lower()
@@ -561,6 +570,14 @@ def _check_cache_control(value: str, extra: dict) -> list[Finding]:
             description="Content may be stored but will be revalidated with the server.",
             recommendation="For sensitive endpoints prefer no-store.",
         ))
+    elif 'private' in lower:
+        findings.append(Finding(
+            header='Cache-Control',
+            severity=Severity.OK,
+            title="Cache-Control: private (shared caches must not store the response)",
+            description="Only the user's browser may cache the response; shared caches (proxies, CDNs) will not.",
+            recommendation="For highly sensitive responses prefer no-store (the browser can still cache 'private' to disk).",
+        ))
 
     if 'public' in lower:
         findings.append(Finding(
@@ -571,7 +588,17 @@ def _check_cache_control(value: str, extra: dict) -> list[Finding]:
         ))
 
     if not findings:
-        findings.append(Finding('Cache-Control', Severity.INFO, f"Cache-Control: '{value}'"))
+        tokens = {t.split('=')[0].strip() for t in lower.split(',') if t.strip()}
+        unknown = tokens - _CACHE_CONTROL_DIRECTIVES
+        if unknown:
+            findings.append(Finding(
+                header='Cache-Control',
+                severity=Severity.INFO,
+                title=f"Cache-Control: unrecognized directive(s): {', '.join(sorted(unknown))}",
+                description=f"Value '{value}' contains tokens that are not standard Cache-Control directives.",
+            ))
+        else:
+            findings.append(Finding('Cache-Control', Severity.OK, f"Cache-Control: '{value}' (valid caching directives)"))
 
     return findings
 
