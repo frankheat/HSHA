@@ -61,6 +61,18 @@ The following headers are checked by default when using `profiles/basic.yaml`.
 
 CSP is evaluated by the built-in Python engine.
 
+#### Multiple policies
+
+A comma separates independent policies: `Content-Security-Policy: a, b` is the
+wire equivalent of sending the header twice (and is what the `join` duplicate
+strategy above produces). A resource must be allowed by **every** policy, so the
+effective policy is their intersection. Findings combine as follows:
+
+| Finding type | Combination | Rationale |
+|---|---|---|
+| `Missing X` | Reported only if **no** policy declares `X` | One policy declaring a directive is enough to restrict the whole response |
+| Everything else | Reported if **any** policy carries it | A policy that says nothing about a directive restricts nothing, so a weakness is only neutralised when another policy actually constrains that directive. Resolving this exactly would require intersecting the source lists, which the engine does not do — it reports instead, which can be conservative but never hides a weakness |
+
 #### Syntax / structural checks
 
 | Condition | Severity | Rationale |

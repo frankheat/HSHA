@@ -60,7 +60,45 @@ _UNQUOTED_KEYWORDS = {
 # ---------------------------------------------------------------------------
 
 def evaluate_csp(csp_value: str) -> list[Finding]:
-    return _python_evaluate(csp_value)
+    """
+    Evaluate a CSP header value.
+
+    A comma separates independent policies — `CSP: a, b` is the wire equivalent
+    of sending the header twice. A resource must be allowed by *every* policy,
+    so the effective policy is their intersection. Findings combine accordingly:
+
+      * "Missing X" is reported only when no policy declares X, since one policy
+        declaring it is enough to restrict the response;
+      * every other finding is reported if any policy carries it. A weakness is
+        only truly neutralised when another policy restricts that same directive,
+        and a policy that says nothing about a directive restricts nothing — so
+        cancelling a weakness would need an exact intersection of the source
+        lists, which this engine does not attempt. Reporting it may be
+        conservative, but it never hides a real weakness.
+    """
+    policies = [p for p in (part.strip() for part in csp_value.split(',')) if p]
+    parsers = [_CSPParser(p) for p in policies] or [_CSPParser(csp_value)]
+    per_policy = [_evaluate_policy(parser) for parser in parsers]
+
+    missing_everywhere = set.intersection(
+        *({f.title for f in findings if _is_absence(f)} for findings in per_policy)
+    )
+
+    seen: set[str] = set()
+    combined: list[Finding] = []
+    for findings in per_policy:
+        for finding in findings:
+            if _is_absence(finding) and finding.title not in missing_everywhere:
+                continue
+            if finding.title not in seen:
+                seen.add(finding.title)
+                combined.append(finding)
+    return combined
+
+
+def _is_absence(finding: Finding) -> bool:
+    """Findings about a directive that is not declared; all are titled "Missing ..."."""
+    return finding.title.startswith("Missing")
 
 
 # ---------------------------------------------------------------------------
@@ -81,9 +119,8 @@ class _CSPParser:
         return self.directives.get('default-src')
 
 
-def _python_evaluate(csp_value: str) -> list[Finding]:
+def _evaluate_policy(csp: _CSPParser) -> list[Finding]:
     findings: list[Finding] = []
-    csp = _CSPParser(csp_value)
 
     _check_missing_semicolon(csp, findings)
     _check_invalid_keyword(csp, findings)
@@ -94,6 +131,7 @@ def _python_evaluate(csp_value: str) -> list[Finding]:
     _check_base_uri(csp, findings)
     _check_frame_ancestors(csp, findings)
     _check_default_src(csp, findings)
+    _check_deprecated(csp, findings)
     _check_misc(csp, findings)
 
     return findings
@@ -376,7 +414,7 @@ def _check_default_src(csp: _CSPParser, findings: list[Finding]):
             ))
 
 
-def _check_misc(csp: _CSPParser, findings: list[Finding]):
+def _check_deprecated(csp: _CSPParser, findings: list[Finding]):
     deprecated = {
         'reflected-xss': "Deprecated — use CSP instead.",
         'referrer': "Deprecated — use Referrer-Policy header.",
@@ -393,6 +431,8 @@ def _check_misc(csp: _CSPParser, findings: list[Finding]):
                 recommendation=f"Remove '{directive}' from CSP.",
             ))
 
+
+def _check_misc(csp: _CSPParser, findings: list[Finding]):
     if 'form-action' not in csp.directives:
         findings.append(Finding(
             header='Content-Security-Policy',

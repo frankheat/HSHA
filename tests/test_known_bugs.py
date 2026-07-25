@@ -11,7 +11,6 @@ import json
 import pytest
 
 from lib.config import AppConfig, HeaderOverride, load_config
-from lib.csp_evaluator import evaluate_csp
 from lib.models import Severity
 
 from conftest import CLEAN_HEADERS, analyze, build_response, findings_for, severity_for
@@ -21,46 +20,7 @@ bug = pytest.mark.xfail(strict=True)
 
 
 # ---------------------------------------------------------------------------
-# 1. lib/csp_evaluator.py — a comma separates independent policies
-#
-# `CSP: a, b` is the wire-equivalent of sending the header twice: two policies,
-# each enforced independently (their intersection applies). _CSPParser only
-# splits on ';', so the second policy is parsed as a *value* of the last
-# directive of the first one. Also reached via the 'join' duplicate strategy
-# in lib/rules.py:87, which serialises duplicate CSP headers with ', '.
-# ---------------------------------------------------------------------------
-
-MULTI_POLICY = ("default-src 'none'; object-src 'none'; base-uri 'none'; "
-                "form-action 'none', script-src 'self'")
-
-
-@bug
-def test_comma_separated_policies_do_not_trigger_a_missing_semicolon_warning():
-    titles = [f.title for f in evaluate_csp(MULTI_POLICY)]
-    assert not any("missing semicolon" in t for t in titles), titles
-
-
-@bug
-def test_directives_of_the_second_policy_are_recognised():
-    """object-src is restricted by the second policy, so it is not missing."""
-    policy = "script-src 'unsafe-inline', object-src 'none'"
-    titles = [f.title for f in evaluate_csp(policy)]
-    assert not any("Missing object-src" in t for t in titles), titles
-
-
-@bug
-def test_duplicate_csp_headers_are_evaluated_as_separate_policies():
-    result = analyze(
-        "Content-Security-Policy: default-src 'none'; object-src 'none'; "
-        "base-uri 'none'; form-action 'none'",
-        "Content-Security-Policy: script-src 'self'",
-    )['content-security-policy']
-    titles = [f.title for f in result.findings]
-    assert not any("missing semicolon" in t for t in titles), titles
-
-
-# ---------------------------------------------------------------------------
-# 2. lib/rules.py:258 — severity_if_present is ignored whenever the header has
+# 1. lib/rules.py:258 — severity_if_present is ignored whenever the header has
 # a built-in checker, because checkers always return at least one finding
 # (often a harmless OK one) and the fallback only fires on an empty list.
 # ---------------------------------------------------------------------------
@@ -72,7 +32,7 @@ def test_severity_if_present_applies_to_headers_that_have_a_checker():
 
 
 # ---------------------------------------------------------------------------
-# 3. lib/rules.py:145 — `sev = missing_sev if required else Severity.INFO`
+# 2. lib/rules.py:145 — `sev = missing_sev if required else Severity.INFO`
 # discards severity_if_missing unless `required: true` is also set. The custom
 # header branch (lib/rules.py:185) honours it, so the two disagree.
 # ---------------------------------------------------------------------------
@@ -84,7 +44,7 @@ def test_severity_if_missing_applies_without_an_explicit_required_flag():
 
 
 # ---------------------------------------------------------------------------
-# 4. lib/config.py:47 — anything not in _KNOWN_KEYS silently lands in `extra`,
+# 3. lib/config.py:47 — anything not in _KNOWN_KEYS silently lands in `extra`,
 # and checkers read it with .get(default). A typo therefore disables the
 # setting with no diagnostic at all.
 # ---------------------------------------------------------------------------
@@ -108,7 +68,7 @@ def test_typo_in_min_max_age_does_not_silently_use_the_default_threshold():
 
 
 # ---------------------------------------------------------------------------
-# 5. lib/reporter.py:64 uses `> NOTE` (INFO counts as a failure) while
+# 4. lib/reporter.py:64 uses `> NOTE` (INFO counts as a failure) while
 # check_headers.py:105 uses `> INFO` for the exit code. The two disagree about
 # what an "issue" is, so `--format list` can name headers while exiting 0.
 # ---------------------------------------------------------------------------
@@ -133,7 +93,7 @@ def test_absent_optional_header_is_not_marked_fail(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# 6. lib/rules.py:90 — the 'strictest' strategy rewrites conflicting
+# 5. lib/rules.py:90 — the 'strictest' strategy rewrites conflicting
 # X-Frame-Options values to DENY, and the checker then reports "DENY (optimal)".
 # A real server misconfiguration is surfaced as a pass.
 # ---------------------------------------------------------------------------
@@ -145,7 +105,7 @@ def test_conflicting_x_frame_options_is_not_reported_as_optimal():
 
 
 # ---------------------------------------------------------------------------
-# 7. lib/rules.py:694 — every ACAO value other than '*' is reported OK, but
+# 6. lib/rules.py:694 — every ACAO value other than '*' is reported OK, but
 # `null` is a well-known bypass (sandboxed iframes, redirects, file:// origins)
 # and is dangerous alongside Access-Control-Allow-Credentials: true.
 # ---------------------------------------------------------------------------
@@ -156,7 +116,7 @@ def test_access_control_allow_origin_null_is_flagged():
 
 
 # ---------------------------------------------------------------------------
-# 8. lib/config.py:82 lowercases config keys and lib/rules.py:179 reuses that
+# 7. lib/config.py:82 lowercases config keys and lib/rules.py:179 reuses that
 # key as the display name, so a custom header loses its casing in the output.
 # ---------------------------------------------------------------------------
 

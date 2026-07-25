@@ -225,3 +225,67 @@ def test_style_src_falls_back_to_default_src():
 def test_explicit_script_src_overrides_default_src():
     policy = "default-src 'unsafe-eval'; script-src 'self'"
     assert not flagged(policy, "script-src: 'unsafe-eval'")
+
+
+# ---------------------------------------------------------------------------
+# Multiple policies in one header value (comma separated)
+#
+# `CSP: a, b` is the wire equivalent of sending the header twice. A resource
+# must be allowed by every policy, so the effective policy is the intersection.
+# ---------------------------------------------------------------------------
+
+def test_comma_does_not_look_like_a_missing_semicolon():
+    policy = ("default-src 'none'; object-src 'none'; base-uri 'none'; "
+              "form-action 'none', script-src 'self'")
+    assert not flagged(policy, "missing semicolon")
+
+
+def test_directive_declared_in_the_second_policy_is_not_reported_missing():
+    """object-src is restricted by the second policy, so it is enforced."""
+    assert not flagged("script-src 'unsafe-inline', object-src 'none'", "Missing object-src")
+
+
+def test_directive_absent_from_every_policy_is_still_reported():
+    assert flagged("script-src 'self', style-src 'self'", "Missing object-src")
+
+
+def test_a_policy_silent_on_a_directive_cannot_mask_a_weakness():
+    """The second policy says nothing about scripts, so it restricts nothing
+    and 'unsafe-inline' stays in force."""
+    assert flagged("script-src 'unsafe-inline', object-src 'none'", "'unsafe-inline'")
+
+
+def test_a_weakness_in_any_policy_is_reported():
+    """Conservative by design: cancelling this would need an exact intersection
+    of the source lists, which the engine does not compute."""
+    assert flagged("script-src 'unsafe-eval', script-src 'self'", "'unsafe-eval'")
+
+
+def test_a_weakness_shared_by_every_policy_is_reported_once():
+    reported = [t for t in titles("script-src 'unsafe-eval', script-src 'unsafe-eval'")
+                if "'unsafe-eval'" in t]
+    assert len(reported) == 1
+
+
+def test_policies_broad_in_different_ways_do_not_cancel_out():
+    """The intersection of `*` and `https:` is still every https origin."""
+    assert flagged("script-src *, script-src https:", "overly broad source")
+
+
+def test_a_syntax_defect_is_reported_even_if_another_policy_is_clean():
+    """No sibling policy can repair a quoting mistake."""
+    assert flagged(f"script-src unsafe-inline, {STRICT}", "Invalid keyword")
+
+
+def test_findings_are_not_duplicated_across_policies():
+    reported = titles("script-src 'self', script-src 'self'")
+    assert len(reported) == len(set(reported)), reported
+
+
+def test_empty_policy_segments_are_ignored():
+    assert evaluate_csp(f"{STRICT}, ,") == evaluate_csp(STRICT)
+
+
+def test_single_policy_behaviour_is_unchanged():
+    assert evaluate_csp(STRICT) == []
+    assert flagged("script-src 'unsafe-inline'", "'unsafe-inline'")
