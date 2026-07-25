@@ -6,15 +6,12 @@ the test turns XPASS, which strict mode reports as a failure — that is the
 signal to delete the marker (and this test's entry) rather than leave a
 silently-passing exception behind.
 """
-import json
-
 import pytest
 
 from lib.config import AppConfig, HeaderOverride, load_config
 from lib.models import Severity
 
-from conftest import CLEAN_HEADERS, analyze, build_response, findings_for, severity_for
-from test_cli import run
+from conftest import analyze, findings_for, severity_for
 
 bug = pytest.mark.xfail(strict=True)
 
@@ -68,32 +65,7 @@ def test_typo_in_min_max_age_does_not_silently_use_the_default_threshold():
 
 
 # ---------------------------------------------------------------------------
-# 4. lib/reporter.py:64 uses `> NOTE` (INFO counts as a failure) while
-# check_headers.py:105 uses `> INFO` for the exit code. The two disagree about
-# what an "issue" is, so `--format list` can name headers while exiting 0.
-# ---------------------------------------------------------------------------
-
-@bug
-def test_list_output_and_exit_code_agree(tmp_path):
-    path = tmp_path / 'response.txt'
-    path.write_text(build_response(*CLEAN_HEADERS))
-    result = run(str(path), '--format', 'list')
-    listed = 'No issues found' not in result.stdout
-    assert listed == (result.returncode == 1), result.stdout
-
-
-@bug
-def test_absent_optional_header_is_not_marked_fail(tmp_path):
-    path = tmp_path / 'response.txt'
-    path.write_text(build_response(*CLEAN_HEADERS))
-    data = json.loads(run(str(path), '--format', 'json').stdout)
-    cache = next(r for r in data if r['header'] == 'Cache-Control')
-    assert cache['severity'] == 'INFO'
-    assert 'Cache-Control' not in run(str(path), '--format', 'list').stdout
-
-
-# ---------------------------------------------------------------------------
-# 5. lib/rules.py:90 — the 'strictest' strategy rewrites conflicting
+# 4. lib/rules.py:90 — the 'strictest' strategy rewrites conflicting
 # X-Frame-Options values to DENY, and the checker then reports "DENY (optimal)".
 # A real server misconfiguration is surfaced as a pass.
 # ---------------------------------------------------------------------------
@@ -105,7 +77,7 @@ def test_conflicting_x_frame_options_is_not_reported_as_optimal():
 
 
 # ---------------------------------------------------------------------------
-# 6. lib/rules.py:694 — every ACAO value other than '*' is reported OK, but
+# 5. lib/rules.py:694 — every ACAO value other than '*' is reported OK, but
 # `null` is a well-known bypass (sandboxed iframes, redirects, file:// origins)
 # and is dangerous alongside Access-Control-Allow-Credentials: true.
 # ---------------------------------------------------------------------------
@@ -116,7 +88,7 @@ def test_access_control_allow_origin_null_is_flagged():
 
 
 # ---------------------------------------------------------------------------
-# 7. lib/config.py:82 lowercases config keys and lib/rules.py:179 reuses that
+# 6. lib/config.py:82 lowercases config keys and lib/rules.py:179 reuses that
 # key as the display name, so a custom header loses its casing in the output.
 # ---------------------------------------------------------------------------
 

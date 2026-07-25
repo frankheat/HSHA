@@ -13,6 +13,17 @@ class Severity(IntEnum):
     CRITICAL = 6
 
 
+def is_issue(severity: Severity) -> bool:
+    """
+    Whether a finding counts as a failure.
+
+    INFO and below are informational: they never mark a header as failed and
+    never affect the exit code. The reporter and the CLI exit code both go
+    through this function, so the two cannot drift apart.
+    """
+    return severity > Severity.INFO
+
+
 SEVERITY_COLORS = {
     Severity.OK: "green",
     Severity.NOTE: "blue",

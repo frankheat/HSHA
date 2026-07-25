@@ -202,3 +202,35 @@ def test_basic_profile_ignores_deprecated_headers(response_file):
     response = build_response(*CLEAN_HEADERS, "X-XSS-Protection: 1; mode=block")
     data = json.loads(run(response_file(response), '--format', 'json').stdout)
     assert not any(r['header'] == 'X-XSS-Protection' for r in data)
+
+
+# ---------------------------------------------------------------------------
+# One definition of "issue": the report and the exit code must agree
+# ---------------------------------------------------------------------------
+
+def test_list_output_and_exit_code_agree(response_file):
+    """The report used to say FAIL for INFO-only findings while exiting 0."""
+    result = run(response_file(CLEAN), '--format', 'list')
+    listed = 'No issues found' not in result.stdout
+    assert listed == (result.returncode == 1), result.stdout
+
+
+def test_absent_optional_header_is_informational_not_a_failure(response_file):
+    data = json.loads(run(response_file(CLEAN), '--format', 'json').stdout)
+    cache = next(r for r in data if r['header'] == 'Cache-Control')
+    assert cache['severity'] == 'INFO'
+    assert 'Cache-Control' not in run(response_file(CLEAN), '--format', 'list').stdout
+
+
+def test_info_only_response_reports_pass_and_exits_zero(response_file):
+    result = run(response_file(CLEAN), '--mode', 'simple')
+    assert 'Overall: PASS' in result.stdout
+    assert 'FAIL' not in result.stdout
+    assert result.returncode == 0
+
+
+def test_informational_findings_are_still_shown(response_file):
+    """Suppressed from the verdict, not from the report."""
+    out = run(response_file(CLEAN), '--mode', 'simple').stdout
+    assert 'Informational' in out
+    assert 'Missing Cache-Control' in out

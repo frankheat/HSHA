@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from lib.config import load_config
-from lib.models import Severity
+from lib.models import Severity, is_issue
 from lib.parser import parse_http_response
 from lib.reporter import console, report
 from lib.rules import analyze_headers
@@ -102,7 +102,7 @@ def main() -> int:
         default=Severity.OK,
     )
     # Exit code: 0 = clean or info only, 1 = at least one LOW/MEDIUM/HIGH/CRITICAL
-    return 0 if worst <= Severity.INFO else 1
+    return 1 if is_issue(worst) else 0
 
 
 if __name__ == '__main__':

@@ -5,7 +5,7 @@ from rich.text import Text
 from rich import box
 
 from .models import (
-    HeaderResult, Severity,
+    HeaderResult, Severity, is_issue,
     SEVERITY_COLORS, SEVERITY_LABELS, SEVERITY_SYMBOLS,
 )
 
@@ -61,7 +61,7 @@ def _val_display(r: HeaderResult) -> str | Text:
 
 
 def _is_issue(r: HeaderResult) -> bool:
-    return any(f.severity > Severity.NOTE for f in r.findings)
+    return any(is_issue(f.severity) for f in r.findings)
 
 
 # ---------------------------------------------------------------------------
@@ -167,9 +167,10 @@ def _print_table_simple(results: list[HeaderResult]):
 
 
 def _print_findings_simple(results: list[HeaderResult]):
-    issues = [(r, [f for f in r.findings if f.severity > Severity.NOTE]) for r in results]
+    issues = [(r, [f for f in r.findings if is_issue(f.severity)]) for r in results]
     issues = [(r, fs) for r, fs in issues if fs]
-    notes = [(r, [f for f in r.findings if f.severity == Severity.NOTE]) for r in results]
+    notes = [(r, [f for f in r.findings
+                  if Severity.OK < f.severity and not is_issue(f.severity)]) for r in results]
     notes = [(r, fs) for r, fs in notes if fs]
 
     if not issues and not notes:
@@ -196,7 +197,7 @@ def _print_findings_simple(results: list[HeaderResult]):
             console.print()
 
     if notes:
-        console.print("[bold]Notes[/bold] [dim](informational, not counted as failures)[/dim]")
+        console.print("[bold]Informational[/bold] [dim](not counted as failures)[/dim]")
         console.print()
 
         for result, findings in notes:

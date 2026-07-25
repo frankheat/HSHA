@@ -37,6 +37,11 @@ def test_note_only_is_not_an_issue():
     assert not reporter._is_issue(result("X-Frame-Options", finding(Severity.NOTE)))
 
 
+def test_info_only_is_not_an_issue():
+    """The exit code treats INFO as clean, so the report must agree."""
+    assert not reporter._is_issue(result("Cache-Control", finding(Severity.INFO)))
+
+
 @pytest.mark.parametrize("severity", [Severity.LOW, Severity.MEDIUM,
                                       Severity.HIGH, Severity.CRITICAL])
 def test_low_and_above_is_an_issue(severity):
@@ -55,10 +60,12 @@ def test_simple_mode_marks_pass_and_fail():
     assert "PASS" in out and "FAIL" in out and "Missing CSP" in out
 
 
-def test_simple_mode_separates_notes_from_issues():
-    out = render([result("X-Frame-Options", finding(Severity.NOTE, "sent 2 times"))],
+@pytest.mark.parametrize("severity", [Severity.NOTE, Severity.INFO])
+def test_simple_mode_separates_informational_from_issues(severity):
+    out = render([result("X-Frame-Options", finding(severity, "worth knowing"))],
                  mode='simple')
-    assert "Notes" in out and "not counted as failures" in out
+    assert "Informational" in out and "not counted as failures" in out
+    assert "worth knowing" in out
     assert "Issues" not in out
 
 
