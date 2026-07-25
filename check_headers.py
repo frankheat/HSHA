@@ -55,19 +55,19 @@ def main() -> int:
     if args.response_file == '-':
         content = sys.stdin.read()
     else:
-        path = Path(args.response_file)
-        if not path.exists():
-            console.print(f"[red]Error: file not found: {args.response_file}[/red]")
+        try:
+            content = Path(args.response_file).read_text(encoding='utf-8', errors='replace')
+        except OSError as e:
+            console.print(f"[red]Error: cannot read '{args.response_file}': {e.strerror}[/red]")
             return 2
-        content = path.read_text(encoding='utf-8', errors='replace')
 
     raw_headers = parse_http_response(content)
-    if args.config and not Path(args.config).exists():
-        console.print(f"[red]Error: config file not found: {args.config}[/red]")
-        return 2
     try:
         config = load_config(args.config)
         results = analyze_headers(raw_headers, config)
+    except OSError as e:
+        console.print(f"[red]Error: cannot read config file '{args.config}': {e.strerror}[/red]")
+        return 2
     except ValueError as e:
         console.print(f"[red]Error: {e}[/red]")
         return 2

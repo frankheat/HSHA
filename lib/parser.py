@@ -32,8 +32,3 @@ def parse_http_response(content: str) -> dict[str, list[str]]:
             headers.setdefault(current_name, []).append(value.strip())
 
     return headers
-
-
-def parse_http_response_file(file_path: str) -> dict[str, list[str]]:
-    with open(file_path, encoding='utf-8', errors='replace') as f:
-        return parse_http_response(f.read())

@@ -48,13 +48,50 @@ def test_info_only_findings_exit_zero(response_file):
 def test_missing_file_exits_two():
     result = run('does-not-exist.txt')
     assert result.returncode == 2
-    assert 'not found' in result.stdout
+    assert 'cannot read' in result.stdout
+    assert 'No such file' in result.stdout
 
 
 def test_missing_config_file_exits_two(response_file):
     result = run(response_file(CLEAN), '--config', 'nope.yaml')
     assert result.returncode == 2
-    assert 'config file not found' in result.stdout
+    assert 'cannot read config file' in result.stdout
+
+
+def test_directory_as_input_exits_two(response_file, tmp_path):
+    """Regression: this used to raise IsADirectoryError and exit 1, which the
+    tool's own contract reads as 'security findings were reported'."""
+    directory = tmp_path / 'adir'
+    directory.mkdir()
+    result = run(str(directory))
+    assert result.returncode == 2
+    assert 'Traceback' not in result.stderr
+
+
+def test_unreadable_file_exits_two(response_file, tmp_path):
+    path = tmp_path / 'locked.txt'
+    path.write_text(CLEAN)
+    path.chmod(0o000)
+    try:
+        result = run(str(path))
+    finally:
+        path.chmod(0o644)
+    assert result.returncode == 2
+    assert 'Traceback' not in result.stderr
+
+
+def test_directory_as_config_exits_two(response_file, tmp_path):
+    directory = tmp_path / 'cfgdir'
+    directory.mkdir()
+    result = run(response_file(CLEAN), '--config', str(directory))
+    assert result.returncode == 2
+    assert 'Traceback' not in result.stderr
+
+
+def test_undecodable_bytes_do_not_crash(response_file, tmp_path):
+    path = tmp_path / 'binary.txt'
+    path.write_bytes(b"HTTP/1.1 200 OK\r\nX-Frame-Options: DENY\xff\xfe\r\n\r\n")
+    assert run(str(path)).returncode in (0, 1)
 
 
 def test_invalid_yaml_config_exits_two(response_file, tmp_path):

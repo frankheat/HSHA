@@ -81,16 +81,7 @@ def test_lines_without_colon_are_ignored():
     assert parse_http_response(raw) == {'x-frame-options': ['DENY']}
 
 
-def test_parse_http_response_file_reads_from_disk(tmp_path):
-    """Convenience wrapper; currently unused by the CLI but part of the API."""
-    from lib.parser import parse_http_response_file
-    path = tmp_path / 'r.txt'
-    path.write_text("HTTP/1.1 200 OK\r\nX-Frame-Options: DENY\r\n\r\n")
-    assert parse_http_response_file(str(path)) == {'x-frame-options': ['DENY']}
-
-
-def test_invalid_utf8_bytes_do_not_crash(tmp_path):
-    from lib.parser import parse_http_response_file
-    path = tmp_path / 'r.txt'
-    path.write_bytes(b"HTTP/1.1 200 OK\r\nX-Weird: \xff\xfe\r\n\r\n")
-    assert 'x-weird' in parse_http_response_file(str(path))
+def test_replacement_characters_from_invalid_utf8_are_tolerated():
+    """The CLI decodes with errors='replace'; the parser must cope with the result."""
+    raw = b"HTTP/1.1 200 OK\r\nX-Weird: \xff\xfe\r\n\r\n".decode('utf-8', errors='replace')
+    assert 'x-weird' in parse_http_response(raw)
