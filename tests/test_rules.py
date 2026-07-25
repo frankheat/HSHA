@@ -245,3 +245,28 @@ def test_severity_if_present_yields_to_a_real_problem_found_by_the_checker():
     findings = findings_for("Referrer-Policy", "unsafe-url", config)
     assert has(findings, "unsafe")
     assert max(f.severity for f in findings) == Severity.HIGH
+
+
+def test_custom_header_keeps_the_casing_used_in_the_config():
+    """Overrides are keyed lowercase; the report must not inherit that."""
+    from lib.config import load_config
+    from conftest import ROOT
+    import tempfile, os
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, 'c.yaml')
+        with open(path, 'w') as f:
+            f.write("headers:\n  X-Request-Id:\n    required: true\n")
+        config = load_config(path)
+    result = analyze("X-Nothing: x", config=config)['x-request-id']
+    assert result.canonical_name == 'X-Request-Id'
+    assert 'X-Request-Id' in result.findings[0].title
+
+
+def test_custom_header_is_still_matched_case_insensitively():
+    from lib.config import AppConfig, HeaderOverride
+    config = AppConfig(overrides={
+        'x-request-id': HeaderOverride(required=True, display_name='X-Request-Id'),
+    })
+    result = analyze("x-REQUEST-id: abc", config=config)['x-request-id']
+    assert result.value == 'abc'
+    assert result.canonical_name == 'X-Request-Id'

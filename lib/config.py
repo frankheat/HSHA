@@ -21,6 +21,10 @@ class HeaderOverride:
     expected_pattern: Optional[str] = None
     # Extra key/value pairs forwarded to individual rule checkers
     extra: dict[str, Any] = field(default_factory=dict)
+    # Header name exactly as written in the config. Overrides are keyed by the
+    # lowercase name, so this is what keeps a custom header's spelling for the
+    # report; headers in the registry carry a canonical name of their own.
+    display_name: str = ""
 
 
 @dataclass
@@ -45,10 +49,11 @@ _HEADER_EXTRA_KEYS: dict[str, set[str]] = {
 }
 
 
-def _parse_override(data: dict) -> HeaderOverride:
+def _parse_override(name: str, data: dict) -> HeaderOverride:
     if not data:
-        return HeaderOverride()
+        return HeaderOverride(display_name=name)
     return HeaderOverride(
+        display_name=name,
         skip=bool(data.get('skip', False)),
         required=data.get('required'),
         severity_if_missing=data.get('severity_if_missing'),
@@ -85,7 +90,7 @@ def load_config(path: Optional[str] = None) -> AppConfig:
                 f"Invalid config for header '{name}': expected a mapping of options, got {type(data).__name__}."
             )
         key = str(name).lower()
-        override = _parse_override(data or {})
+        override = _parse_override(str(name), data or {})
 
         allowed_extra = _HEADER_EXTRA_KEYS.get(key, set())
         unknown = set(override.extra) - allowed_extra

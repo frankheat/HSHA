@@ -29,7 +29,12 @@ def test_header_names_are_normalised_to_lowercase(yaml_file):
 
 def test_header_entry_without_options_yields_an_empty_override(yaml_file):
     config = load_config(yaml_file("headers:\n  X-Frame-Options:\n"))
-    assert config.overrides['x-frame-options'] == HeaderOverride()
+    assert config.overrides['x-frame-options'] == HeaderOverride(display_name='X-Frame-Options')
+
+
+def test_the_configured_spelling_is_preserved(yaml_file):
+    config = load_config(yaml_file("headers:\n  X-Request-Id:\n    required: true\n"))
+    assert config.overrides['x-request-id'].display_name == 'X-Request-Id'
 
 
 def test_empty_file_yields_no_overrides(yaml_file):

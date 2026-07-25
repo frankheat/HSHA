@@ -190,7 +190,7 @@ def analyze_headers(
     for name, override in config.overrides.items():
         if name in _DEFAULT_KEYS or override.skip:
             continue
-        canonical = name
+        canonical = override.display_name or name
         occurrences = raw_headers.get(name)
         findings = []
         value = None
