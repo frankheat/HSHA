@@ -141,11 +141,14 @@ def analyze_headers(
         findings: list[Finding] = []
         value: Optional[str] = None
 
+        # Browsers ignore a header with an empty value, so its security impact is
+        # identical to the header not being sent: both use the same severity.
+        absent_sev = missing_sev if required else Severity.INFO
+
         if occurrences is None:
-            sev = missing_sev if required else Severity.INFO
             findings.append(Finding(
                 header=canonical,
-                severity=sev,
+                severity=absent_sev,
                 title=f"Missing {canonical}",
                 description=f"The {canonical} header is absent from the response.",
                 recommendation=_MISSING_RECS.get(key, f"Add the {canonical} header.") if required else "",
@@ -157,9 +160,13 @@ def analyze_headers(
             if value.strip() == '':
                 findings.append(Finding(
                     header=canonical,
-                    severity=Severity.HIGH,
+                    severity=absent_sev,
                     title=f"{canonical}: present but empty",
-                    description="A header with an empty value is silently ignored by browsers.",
+                    description=(
+                        f"{canonical} is present but carries no value. Browsers ignore it "
+                        "entirely, so the effect is the same as not sending it at all. "
+                        "An empty value usually points at a misconfigured template or proxy."
+                    ),
                     recommendation=_MISSING_RECS.get(key, f"Set a valid value for {canonical}."),
                 ))
             else:
@@ -276,7 +283,8 @@ def _validate_value(
     if checker:
         return checker(value, override.extra)
 
-    return []
+    # Defensive: reached only if a SECURITY_HEADERS entry has no checker yet.
+    return []  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------
@@ -536,13 +544,6 @@ def _check_referrer_policy(value: str, extra: dict) -> list[Finding]:
             title=f"Referrer-Policy: '{n}' (unsafe)",
             description="Sends the full URL as referrer even over plain HTTP, leaking sensitive paths.",
             recommendation="Use no-referrer or strict-origin-when-cross-origin.",
-        )]
-    if n == '':
-        return [Finding(
-            header='Referrer-Policy',
-            severity=Severity.LOW,
-            title="Referrer-Policy: empty (browser default behavior)",
-            recommendation="Explicitly set a policy (e.g. strict-origin-when-cross-origin).",
         )]
     return [Finding('Referrer-Policy', Severity.INFO, f"Referrer-Policy: unrecognized value '{value}'")]
 

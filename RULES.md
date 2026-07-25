@@ -28,7 +28,7 @@ These checks apply to every header before any value-specific logic runs.
 |---|---|---|
 | Header absent + required | Per-header default | Missing required security header |
 | Header absent + optional | INFO | Absent but not mandatory in current profile |
-| Header present, value is empty | **HIGH** | Browsers silently ignore headers with no value |
+| Header present, value is empty | Same as absent | Browsers ignore a header with no value, so the impact is identical to not sending it. Reported under its own title because an empty value usually means a misconfigured template or proxy |
 | Header sent more than once | **NOTE** | Duplicates usually come from a proxy/CDN adding its own copy; the effective value is resolved as described below and checks run against it |
 
 ### Duplicate headers
@@ -202,7 +202,6 @@ Strict-Transport-Security:
 | `no-referrer`, `strict-origin`, `strict-origin-when-cross-origin` | OK | Strong policies — no or minimal referrer leakage |
 | `no-referrer-when-downgrade`, `origin`, `origin-when-cross-origin`, `same-origin` | LOW | Acceptable but leaks some referrer information |
 | `unsafe-url`, `always` | HIGH | Sends full URL as referrer even over HTTP — leaks sensitive paths |
-| Empty value | LOW | Browser default behavior varies |
 | Any other value | INFO | Unrecognized value |
 
 ---

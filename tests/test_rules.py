@@ -59,11 +59,30 @@ def test_absent_header_has_value_none_and_is_not_present():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("value", ["", "   "])
-def test_empty_value_is_high(value):
+def test_empty_value_is_reported_as_present_but_empty(value):
     result = result_for("X-Frame-Options", value)
     assert result.is_present
-    assert result.worst_severity == Severity.HIGH
     assert has(result.findings, "present but empty")
+
+
+@pytest.mark.parametrize("key,canonical", [(k, c) for k, c, *_ in SECURITY_HEADERS],
+                         ids=[c for _, c, *_ in SECURITY_HEADERS])
+def test_empty_value_weighs_the_same_as_an_absent_header(key, canonical):
+    """Browsers ignore an empty header, so its impact equals that of a missing one."""
+    absent = analyze("X-Nothing: x")[key].worst_severity
+    assert result_for(canonical, "").worst_severity == absent
+
+
+def test_empty_value_severity_follows_config_overrides():
+    config = AppConfig(overrides={
+        'etag': HeaderOverride(required=True, severity_if_missing='high'),
+    })
+    assert severity_for("ETag", "", config) == Severity.HIGH
+
+
+def test_empty_optional_header_is_not_escalated():
+    """Regression: an empty ETag used to be HIGH while a missing one was INFO."""
+    assert severity_for("ETag", "") == Severity.INFO
 
 
 def test_empty_value_skips_the_normal_checker():
