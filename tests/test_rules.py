@@ -212,3 +212,36 @@ def test_extended_profile_requires_hsts_preload():
     findings = findings_for("Strict-Transport-Security",
                             "max-age=31536000; includeSubDomains", profile('extended'))
     assert has(findings, "missing preload")
+
+
+# ---------------------------------------------------------------------------
+# Config options must not be silently discarded
+# ---------------------------------------------------------------------------
+
+def test_severity_if_missing_implies_the_header_is_required():
+    """Stating a severity for absence used to be ignored without `required: true`."""
+    config = AppConfig(overrides={
+        'clear-site-data': HeaderOverride(severity_if_missing='critical'),
+    })
+    assert analyze("X-Nothing: x", config=config)['clear-site-data'].worst_severity == Severity.CRITICAL
+
+
+def test_explicit_required_false_still_wins_over_severity_if_missing():
+    config = AppConfig(overrides={
+        'clear-site-data': HeaderOverride(required=False, severity_if_missing='critical'),
+    })
+    assert analyze("X-Nothing: x", config=config)['clear-site-data'].worst_severity == Severity.INFO
+
+
+def test_severity_if_present_applies_to_headers_that_have_a_checker():
+    """Checkers report a clean value with an OK finding, which used to count as
+    'the checker said something' and suppress the configured severity."""
+    config = AppConfig(overrides={'cache-control': HeaderOverride(severity_if_present='critical')})
+    assert severity_for("Cache-Control", "no-store", config) == Severity.CRITICAL
+
+
+def test_severity_if_present_yields_to_a_real_problem_found_by_the_checker():
+    config = AppConfig(overrides={'referrer-policy': HeaderOverride(severity_if_present='low')})
+    findings = findings_for("Referrer-Policy", "unsafe-url", config)
+    assert has(findings, "unsafe")
+    assert max(f.severity for f in findings) == Severity.HIGH

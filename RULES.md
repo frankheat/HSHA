@@ -439,11 +439,16 @@ While the security logic is defined in code, the following parameters can be adj
 | Parameter | Effect |
 |---|---|
 | `required: true/false` | Override whether absence is reported as a finding |
-| `severity_if_missing: <level>` | Override the severity when the header is absent |
-| `severity_if_present: <level>` | Emit a finding when the header is present (e.g. flag info-disclosure headers) |
+| `severity_if_missing: <level>` | Severity when the header is absent. Implies `required: true`, since asking for a severity states that the header is expected — an explicit `required: false` still wins |
+| `severity_if_present: <level>` | Emit a finding when the header is present (e.g. flag info-disclosure headers). A real problem found by the built-in checker is more specific and takes precedence |
 | `expected_value: "..."` | Assert an exact value — bypasses all built-in checks |
 | `expected_pattern: "regex"` | Assert the value matches a regex — bypasses all built-in checks |
 | `skip: true` | Exclude this header entirely from analysis and output |
 | `min_max_age: N` | *(HSTS only)* Minimum acceptable `max-age` in seconds |
 | `require_include_subdomains: true/false` | *(HSTS only)* Whether `includeSubDomains` is required |
 | `require_preload: true/false` | *(HSTS only)* Whether `preload` is required |
+
+Any other option — including a misspelling of one of the above, or an HSTS-only
+option set on a different header — is rejected when the config is loaded, with
+exit code `2`. An unrecognised option would otherwise be dropped in silence and
+the setting you believed you had made would never take effect.

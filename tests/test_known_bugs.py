@@ -8,64 +8,16 @@ silently-passing exception behind.
 """
 import pytest
 
-from lib.config import AppConfig, HeaderOverride, load_config
+from lib.config import load_config
 from lib.models import Severity
 
-from conftest import analyze, findings_for, severity_for
+from conftest import analyze, severity_for
 
 bug = pytest.mark.xfail(strict=True)
 
 
 # ---------------------------------------------------------------------------
-# 1. lib/rules.py:258 — severity_if_present is ignored whenever the header has
-# a built-in checker, because checkers always return at least one finding
-# (often a harmless OK one) and the fallback only fires on an empty list.
-# ---------------------------------------------------------------------------
-
-@bug
-def test_severity_if_present_applies_to_headers_that_have_a_checker():
-    config = AppConfig(overrides={'cache-control': HeaderOverride(severity_if_present='critical')})
-    assert severity_for("Cache-Control", "no-store", config) == Severity.CRITICAL
-
-
-# ---------------------------------------------------------------------------
-# 2. lib/rules.py:145 — `sev = missing_sev if required else Severity.INFO`
-# discards severity_if_missing unless `required: true` is also set. The custom
-# header branch (lib/rules.py:185) honours it, so the two disagree.
-# ---------------------------------------------------------------------------
-
-@bug
-def test_severity_if_missing_applies_without_an_explicit_required_flag():
-    config = AppConfig(overrides={'clear-site-data': HeaderOverride(severity_if_missing='critical')})
-    assert analyze("X-Nothing: x", config=config)['clear-site-data'].worst_severity == Severity.CRITICAL
-
-
-# ---------------------------------------------------------------------------
-# 3. lib/config.py:47 — anything not in _KNOWN_KEYS silently lands in `extra`,
-# and checkers read it with .get(default). A typo therefore disables the
-# setting with no diagnostic at all.
-# ---------------------------------------------------------------------------
-
-@bug
-def test_unknown_config_key_is_rejected(tmp_path):
-    path = tmp_path / 'typo.yaml'
-    path.write_text("headers:\n  Strict-Transport-Security:\n    min_maxage: 99999999\n")
-    with pytest.raises(ValueError, match="min_maxage"):
-        load_config(str(path))
-
-
-@bug
-def test_typo_in_min_max_age_does_not_silently_use_the_default_threshold():
-    config = AppConfig(overrides={
-        'strict-transport-security': HeaderOverride(extra={'min_maxage': 99999999}),
-    })
-    findings = findings_for("Strict-Transport-Security",
-                            "max-age=31536000; includeSubDomains", config)
-    assert any("max-age too short" in f.title for f in findings)
-
-
-# ---------------------------------------------------------------------------
-# 4. lib/rules.py:90 — the 'strictest' strategy rewrites conflicting
+# 1. lib/rules.py:90 — the 'strictest' strategy rewrites conflicting
 # X-Frame-Options values to DENY, and the checker then reports "DENY (optimal)".
 # A real server misconfiguration is surfaced as a pass.
 # ---------------------------------------------------------------------------
@@ -77,7 +29,7 @@ def test_conflicting_x_frame_options_is_not_reported_as_optimal():
 
 
 # ---------------------------------------------------------------------------
-# 5. lib/rules.py:694 — every ACAO value other than '*' is reported OK, but
+# 2. lib/rules.py:694 — every ACAO value other than '*' is reported OK, but
 # `null` is a well-known bypass (sandboxed iframes, redirects, file:// origins)
 # and is dangerous alongside Access-Control-Allow-Credentials: true.
 # ---------------------------------------------------------------------------
@@ -88,7 +40,7 @@ def test_access_control_allow_origin_null_is_flagged():
 
 
 # ---------------------------------------------------------------------------
-# 6. lib/config.py:82 lowercases config keys and lib/rules.py:179 reuses that
+# 3. lib/config.py:82 lowercases config keys and lib/rules.py:179 reuses that
 # key as the display name, so a custom header loses its casing in the output.
 # ---------------------------------------------------------------------------
 

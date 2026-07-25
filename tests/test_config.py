@@ -126,3 +126,48 @@ def test_get_override_returns_a_neutral_default_when_absent():
 def test_shipped_profiles_load(name):
     from conftest import ROOT
     assert load_config(str(ROOT / 'profiles' / f'{name}.yaml')).overrides
+
+
+# ---------------------------------------------------------------------------
+# Unknown options are rejected rather than silently dropped
+# ---------------------------------------------------------------------------
+
+def test_unknown_option_is_rejected(yaml_file):
+    """A typo used to land in `extra`, be read by nobody, and leave the default
+    threshold quietly in force."""
+    path = yaml_file("headers:\n  Strict-Transport-Security:\n    min_maxage: 99999999\n")
+    with pytest.raises(ValueError, match="min_maxage"):
+        load_config(path)
+
+
+def test_rejection_message_lists_the_valid_options(yaml_file):
+    path = yaml_file("headers:\n  Strict-Transport-Security:\n    min_maxage: 1\n")
+    with pytest.raises(ValueError, match="min_max_age"):
+        load_config(path)
+
+
+def test_hsts_extra_options_are_accepted(yaml_file):
+    path = yaml_file(
+        "headers:\n"
+        "  Strict-Transport-Security:\n"
+        "    min_max_age: 63072000\n"
+        "    require_include_subdomains: false\n"
+        "    require_preload: true\n"
+    )
+    assert load_config(path).overrides['strict-transport-security'].extra == {
+        'min_max_age': 63072000,
+        'require_include_subdomains': False,
+        'require_preload': True,
+    }
+
+
+def test_an_extra_option_is_rejected_on_a_header_that_does_not_use_it(yaml_file):
+    path = yaml_file("headers:\n  X-Frame-Options:\n    min_max_age: 63072000\n")
+    with pytest.raises(ValueError, match="min_max_age"):
+        load_config(path)
+
+
+def test_unknown_option_on_a_custom_header_is_rejected(yaml_file):
+    path = yaml_file("headers:\n  X-Request-Id:\n    requiredd: true\n")
+    with pytest.raises(ValueError, match="requiredd"):
+        load_config(path)

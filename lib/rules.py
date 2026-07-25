@@ -7,7 +7,7 @@ from typing import Callable, Optional
 
 from .config import AppConfig, HeaderOverride, get_override
 from .csp_evaluator import evaluate_csp
-from .models import Finding, HeaderResult, Severity
+from .models import Finding, HeaderResult, Severity, is_issue
 
 # ---------------------------------------------------------------------------
 # Registry of headers to check
@@ -133,7 +133,14 @@ def analyze_headers(
             continue
         occurrences = raw_headers.get(key)
 
-        required = override.required if override.required is not None else default_required
+        if override.required is not None:
+            required = override.required
+        elif override.severity_if_missing:
+            # Setting a severity for absence states that the header is expected;
+            # an explicit `required: false` still wins over that.
+            required = True
+        else:
+            required = default_required
         missing_sev = (
             _parse_severity(override.severity_if_missing, default_missing_sev)
         )
@@ -262,11 +269,14 @@ def _validate_value(
             )]
         return []
 
-    # severity_if_present: emit finding when header exists (e.g. user marks a header as bad)
+    # severity_if_present: emit finding when header exists (e.g. user marks a header as bad).
+    # Real problems found by the checker are more specific and win; otherwise the
+    # config severity applies. Checkers report a clean value with an OK finding, so
+    # the test is "found no issue", not "returned nothing".
     if override.severity_if_present:
         checker = _CHECKERS.get(key)
         findings = checker(value, override.extra) if checker else []
-        if not findings:
+        if not any(is_issue(f.severity) for f in findings):
             findings = [Finding(
                 header=canonical,
                 severity=_parse_severity(override.severity_if_present, Severity.MEDIUM),

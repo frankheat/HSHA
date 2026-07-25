@@ -33,6 +33,17 @@ _KNOWN_KEYS = {
     'expected_value', 'expected_pattern',
 }
 
+# Per-header options forwarded to that header's checker in lib/rules.py through
+# HeaderOverride.extra. Anything else is a mistake and is rejected at load time,
+# because an unrecognised key would otherwise be dropped without a word and the
+# setting the user believed they had made would never take effect.
+# Keep in sync with the checkers that read `extra`.
+_HEADER_EXTRA_KEYS: dict[str, set[str]] = {
+    'strict-transport-security': {
+        'min_max_age', 'require_include_subdomains', 'require_preload',
+    },
+}
+
 
 def _parse_override(data: dict) -> HeaderOverride:
     if not data:
@@ -73,13 +84,24 @@ def load_config(path: Optional[str] = None) -> AppConfig:
             raise ValueError(
                 f"Invalid config for header '{name}': expected a mapping of options, got {type(data).__name__}."
             )
+        key = str(name).lower()
         override = _parse_override(data or {})
+
+        allowed_extra = _HEADER_EXTRA_KEYS.get(key, set())
+        unknown = set(override.extra) - allowed_extra
+        if unknown:
+            valid = ', '.join(sorted(_KNOWN_KEYS | allowed_extra))
+            raise ValueError(
+                f"Unknown option(s) for header '{name}': {', '.join(sorted(unknown))}. "
+                f"Valid options for this header: {valid}."
+            )
+
         if override.expected_pattern:
             try:
                 re.compile(override.expected_pattern)
             except re.error as e:
                 raise ValueError(f"Invalid expected_pattern for header '{name}': {e}")
-        overrides[str(name).lower()] = override
+        overrides[key] = override
     return AppConfig(overrides=overrides)
 
 
