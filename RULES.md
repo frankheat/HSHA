@@ -317,8 +317,35 @@ The following headers are checked only when using `profiles/extended.yaml`.
 | Value | Severity | Rationale |
 |---|---|---|
 | `*` | MEDIUM | Any origin can read the response — dangerous with sensitive data |
-| `null` | **HIGH** | The null origin is not a trusted party: any page can obtain it through a sandboxed iframe, a `data:` URL or a cross-origin redirect. Unlike the wildcard it is a concrete origin, so browsers do send credentials with it when `Access-Control-Allow-Credentials: true` — an attacker can then read authenticated responses. Almost always the result of reflecting the `Origin` header |
+| `null` | **HIGH** | Forgeable by any attacker and, unlike `*`, usable with credentials — see below |
 | Specific origin | OK | Correctly restricted to a trusted origin |
+
+#### Why `null` outranks `*`
+
+`*` looks like the more permissive of the two, so the severity ordering is worth
+explaining.
+
+**`*` is usually a decision.** Public APIs and CDNs set it deliberately. It also
+carries a safety catch built into the browser: the wildcard is incompatible with
+credentials, so a response sent with `Access-Control-Allow-Origin: *` is never
+readable together with the victim's cookies. Whatever leaks is data that was
+already served without authentication. MEDIUM is a "confirm this is intended"
+signal.
+
+**`null` is almost never a decision.** Nobody sets out to grant access to
+sandboxed iframes and `file://` pages. It nearly always comes from code that
+reflects the `Origin` header without validating it: some requests legitimately
+arrive with `Origin: null`, the value is echoed back, and the allowlist now
+contains an origin that *any* attacker can assume — a sandboxed iframe, a `data:`
+URL or a cross-origin redirect all produce it.
+
+The decisive difference is that `null` is a **concrete origin**, not a wildcard,
+so the browser's safety catch does not apply: with
+`Access-Control-Allow-Credentials: true` the browser sends cookies, and the
+attacker's page reads authenticated responses.
+
+The value that reads as the more cautious of the two is therefore the one that
+can expose authenticated data, which is why it is reported as the more severe.
 
 ---
 
