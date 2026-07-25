@@ -189,6 +189,19 @@ This makes the tool suitable for use in CI/CD pipelines.
 
 ---
 
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+Tests that are marked `xfail` in `tests/test_known_bugs.py` document confirmed
+defects: each one asserts the intended behaviour and will start failing (as
+XPASS) once the corresponding bug is fixed.
+
+---
+
 ## Project Structure
 
 ```
