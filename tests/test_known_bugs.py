@@ -11,7 +11,7 @@ import pytest
 from lib.config import load_config
 from lib.models import Severity
 
-from conftest import analyze, severity_for
+from conftest import analyze
 
 bug = pytest.mark.xfail(strict=True)
 
@@ -29,18 +29,7 @@ def test_conflicting_x_frame_options_is_not_reported_as_optimal():
 
 
 # ---------------------------------------------------------------------------
-# 2. lib/rules.py:694 — every ACAO value other than '*' is reported OK, but
-# `null` is a well-known bypass (sandboxed iframes, redirects, file:// origins)
-# and is dangerous alongside Access-Control-Allow-Credentials: true.
-# ---------------------------------------------------------------------------
-
-@bug
-def test_access_control_allow_origin_null_is_flagged():
-    assert severity_for("Access-Control-Allow-Origin", "null") >= Severity.MEDIUM
-
-
-# ---------------------------------------------------------------------------
-# 3. lib/config.py:82 lowercases config keys and lib/rules.py:179 reuses that
+# 2. lib/config.py:82 lowercases config keys and lib/rules.py:179 reuses that
 # key as the display name, so a custom header loses its casing in the output.
 # ---------------------------------------------------------------------------
 

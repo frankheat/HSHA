@@ -98,6 +98,8 @@ CASES = [
     # --- CORS ---
     ("Access-Control-Allow-Origin", "https://trusted.example.com", Severity.OK),
     ("Access-Control-Allow-Origin", "*", Severity.MEDIUM),
+    ("Access-Control-Allow-Origin", "null", Severity.HIGH),
+    ("Access-Control-Allow-Origin", "NULL", Severity.HIGH),
     ("Access-Control-Allow-Credentials", "false", Severity.OK),
     ("Access-Control-Allow-Credentials", "true", Severity.MEDIUM),
 
@@ -194,3 +196,15 @@ def test_cache_control_no_store_takes_precedence_over_no_cache():
     findings = findings_for("Cache-Control", "no-store, no-cache")
     assert has(findings, "no-store")
     assert not has(findings, "revalidated before use")
+
+
+def test_acao_null_is_not_treated_as_a_trusted_origin():
+    """Any page can obtain the null origin via a sandboxed iframe, and unlike
+    the wildcard it is a concrete origin, so credentials are sent with it."""
+    findings = findings_for("Access-Control-Allow-Origin", "null")
+    assert has(findings, "null")
+    assert not has(findings, "specific origin")
+
+
+def test_acao_still_accepts_a_real_origin():
+    assert severity_for("Access-Control-Allow-Origin", "https://app.example.com") == Severity.OK

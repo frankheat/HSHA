@@ -702,6 +702,18 @@ def _check_acao(value: str, extra: dict) -> list[Finding]:
             description="Any origin can read this response. Dangerous if the response contains sensitive data.",
             recommendation="Restrict to specific trusted origins: Access-Control-Allow-Origin: https://trusted.example.com",
         )]
+    if n.lower() == 'null':
+        return [Finding(
+            header='Access-Control-Allow-Origin',
+            severity=Severity.HIGH,
+            title="Access-Control-Allow-Origin: null",
+            description="The null origin is not a trusted party: any page can obtain it through a "
+                        "sandboxed iframe, a data: URL or a cross-origin redirect. Unlike the "
+                        "wildcard, it is a concrete origin, so browsers do send credentials with it "
+                        "when Access-Control-Allow-Credentials is true — which lets an attacker read "
+                        "authenticated responses. It usually comes from reflecting the Origin header.",
+            recommendation="Never allowlist 'null'. Echo only origins from a known list.",
+        )]
     return [Finding('Access-Control-Allow-Origin', Severity.OK, f"Access-Control-Allow-Origin: specific origin ('{n}')")]
 
 

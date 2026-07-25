@@ -317,6 +317,7 @@ The following headers are checked only when using `profiles/extended.yaml`.
 | Value | Severity | Rationale |
 |---|---|---|
 | `*` | MEDIUM | Any origin can read the response — dangerous with sensitive data |
+| `null` | **HIGH** | The null origin is not a trusted party: any page can obtain it through a sandboxed iframe, a `data:` URL or a cross-origin redirect. Unlike the wildcard it is a concrete origin, so browsers do send credentials with it when `Access-Control-Allow-Credentials: true` — an attacker can then read authenticated responses. Almost always the result of reflecting the `Origin` header |
 | Specific origin | OK | Correctly restricted to a trusted origin |
 
 ---
