@@ -730,6 +730,31 @@ def _check_acao(value: str, extra: dict) -> list[Finding]:
                         "authenticated responses. It usually comes from reflecting the Origin header.",
             recommendation="Never allowlist 'null'. Echo only origins from a known list.",
         )]
+    if ',' in n:
+        # Fails closed — nobody gets access — so this is a broken configuration
+        # rather than an exposure.
+        return [Finding(
+            header='Access-Control-Allow-Origin',
+            severity=Severity.INFO,
+            title=f"Access-Control-Allow-Origin lists more than one origin: '{n}'",
+            description="The header carries exactly one origin, or '*', or 'null'. A list never "
+                        "matches the requesting origin, so the CORS check fails and no site gets "
+                        "access — including the ones it was meant for. A list usually means two "
+                        "components are both setting the header, typically the application and a "
+                        "proxy in front of it.",
+            recommendation="Send a single origin, picked per request from an allowlist.",
+        )]
+    if n.lower().startswith('http://'):
+        return [Finding(
+            header='Access-Control-Allow-Origin',
+            severity=Severity.LOW,
+            title=f"Access-Control-Allow-Origin allows a plaintext origin: '{n}'",
+            description="The allowed origin is not protected by TLS, so anyone able to tamper with "
+                        "traffic to it can impersonate it and read whatever this endpoint returns "
+                        "to it. A localhost origin here usually means a development configuration "
+                        "reached production.",
+            recommendation="Allow an https:// origin instead.",
+        )]
     return [Finding('Access-Control-Allow-Origin', Severity.OK, f"Access-Control-Allow-Origin: specific origin ('{n}')")]
 
 

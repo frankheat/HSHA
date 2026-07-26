@@ -79,6 +79,15 @@ def _cors_credentials(results: dict[str, HeaderResult]) -> list[tuple[str, Findi
             "to make it work — that would let any site read logged-in users' data.",
         )
 
+    if ',' in origin:
+        return finding(
+            Severity.INFO,
+            "Access-Control-Allow-Credentials has no effect: the allowed origin is not usable",
+            "Access-Control-Allow-Origin lists more than one origin, which never matches the "
+            "requesting origin, so no site can read the response with or without credentials.",
+            "Fix Access-Control-Allow-Origin first; this header cannot take effect until then.",
+        )
+
     if origin.lower() == 'null':
         return finding(
             Severity.CRITICAL,

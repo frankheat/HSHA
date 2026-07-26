@@ -334,7 +334,9 @@ The following headers are checked only when using `profiles/extended.yaml`.
 |---|---|---|
 | `*` | MEDIUM | Any origin can read the response — dangerous with sensitive data |
 | `null` | **HIGH** | Forgeable by any attacker and, unlike `*`, usable with credentials — see below |
-| Specific origin | OK | Correctly restricted to a trusted origin |
+| More than one origin (`https://a.example, https://b.example`) | INFO | The header carries exactly one origin, `*` or `null`. A list never matches the requesting origin, so the CORS check fails and no site gets access, including the intended ones. Fails closed, so it is a broken configuration rather than an exposure. Usually means two components are both setting the header — typically the application and a proxy in front of it |
+| `http://` origin | LOW | The allowed origin is not protected by TLS, so anyone able to tamper with traffic to it can impersonate it and read what this endpoint returns to it. A `localhost` origin here usually means a development configuration reached production |
+| Specific `https://` origin | OK | Correctly restricted to a trusted origin |
 
 #### Why `null` outranks `*`
 

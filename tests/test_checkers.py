@@ -100,6 +100,10 @@ CASES = [
     ("Access-Control-Allow-Origin", "*", Severity.MEDIUM),
     ("Access-Control-Allow-Origin", "null", Severity.HIGH),
     ("Access-Control-Allow-Origin", "NULL", Severity.HIGH),
+    ("Access-Control-Allow-Origin", "https://a.example.com, https://b.example.com", Severity.INFO),
+    ("Access-Control-Allow-Origin", "http://app.example.com", Severity.LOW),
+    ("Access-Control-Allow-Origin", "http://localhost:3000", Severity.LOW),
+    ("Access-Control-Allow-Origin", "HTTP://APP.EXAMPLE.COM", Severity.LOW),
     ("Access-Control-Allow-Credentials", "false", Severity.OK),
     # true alone, with no Access-Control-Allow-Origin in the response, has no effect
     ("Access-Control-Allow-Credentials", "true", Severity.INFO),
@@ -208,4 +212,21 @@ def test_acao_null_is_not_treated_as_a_trusted_origin():
 
 
 def test_acao_still_accepts_a_real_origin():
+    assert severity_for("Access-Control-Allow-Origin", "https://app.example.com") == Severity.OK
+
+
+def test_acao_multiple_origins_explains_that_nobody_gets_access():
+    """The list never matches a requesting origin, so CORS fails closed."""
+    findings = findings_for("Access-Control-Allow-Origin", "https://a.example.com, https://b.example.com")
+    assert has(findings, "lists more than one origin")
+    assert "no site gets access" in findings[0].description
+
+
+def test_acao_plaintext_origin_is_reported_before_the_ok_branch():
+    findings = findings_for("Access-Control-Allow-Origin", "http://app.example.com")
+    assert has(findings, "plaintext origin")
+    assert not has(findings, "specific origin")
+
+
+def test_acao_https_origin_stays_ok():
     assert severity_for("Access-Control-Allow-Origin", "https://app.example.com") == Severity.OK

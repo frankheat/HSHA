@@ -119,3 +119,9 @@ def test_the_header_carries_a_single_verdict(origin):
 def test_the_per_header_checker_no_longer_grades_on_its_own():
     from lib.rules import _check_acac
     assert all(f.severity == Severity.OK for f in _check_acac("true", {}))
+
+
+def test_credentials_are_moot_when_the_origin_list_is_invalid():
+    result = cors("https://a.example.com, https://b.example.com")
+    assert result.worst_severity == Severity.INFO
+    assert has(result.findings, "not usable")
