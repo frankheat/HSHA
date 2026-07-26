@@ -30,10 +30,22 @@ def test_null_origin_with_credentials_is_critical():
     assert has(result.findings, "null with credentials enabled")
 
 
-def test_wildcard_with_credentials_is_a_broken_configuration():
+def test_wildcard_with_credentials_is_functional_not_a_weakness():
+    """Browsers reject the credentialed request, so the combination exposes
+    nothing. The wildcard's own effect is graded on ACAO."""
     result = cors("*")
-    assert result.worst_severity == Severity.MEDIUM
+    assert result.worst_severity == Severity.INFO
     assert has(result.findings, "the request fails")
+
+
+def test_wildcard_response_still_fails_the_build_through_the_origin_header():
+    results = analyze(f"{ACAO}: *", f"{ACAC}: true")
+    assert results['access-control-allow-origin'].worst_severity == Severity.MEDIUM
+
+
+def test_wildcard_recommendation_warns_against_fixing_it_with_reflection():
+    finding = next(f for f in cors("*").findings if f.severity == Severity.INFO)
+    assert "Do not echo back" in finding.recommendation
 
 
 def test_specific_origin_with_credentials_is_informational():

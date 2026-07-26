@@ -376,7 +376,7 @@ receives them. This header is therefore graded against
 | Access-Control-Allow-Origin | Severity | Rationale |
 |---|---|---|
 | `null` | **CRITICAL** | The null origin is forgeable by any page and is a concrete origin, so cookies are sent with it: an attacker's page reads this endpoint as the logged-in user |
-| `*` | MEDIUM | Browsers refuse the wildcard together with credentials, so every credentialed request is rejected. A broken configuration rather than an exposure — the two headers contradict each other |
+| `*` | INFO | Browsers refuse the wildcard together with credentials, so every credentialed request is rejected. Nothing is exposed by the combination itself — it is a functional contradiction, not a weakness, and the wildcard's own effect on non-credentialed requests is graded on `Access-Control-Allow-Origin` |
 | A specific origin | INFO | Correct authenticated CORS. Reported so the origin can be verified — see below |
 | Absent | INFO | No origin is authorised to read the response, so credentials change nothing; usually a leftover |
 | Not evaluated (excluded by the profile) | INFO | Stated explicitly, because silence would read as approval |

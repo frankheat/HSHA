@@ -63,14 +63,20 @@ def _cors_credentials(results: dict[str, HeaderResult]) -> list[tuple[str, Findi
     origin = (acao.value or '').strip()
 
     if origin == '*':
+        # Not a security finding: browsers reject the credentialed request, so
+        # nothing is exposed that the wildcard on ACAO does not already expose,
+        # and that is graded there. What is left is a functional contradiction.
         return finding(
-            Severity.MEDIUM,
+            Severity.INFO,
             "Access-Control-Allow-Origin: * with credentials enabled — the request fails",
-            "Browsers refuse to use the wildcard together with credentials, so every "
-            "credentialed cross-origin request to this endpoint is rejected. This is a broken "
-            "configuration rather than an exposure: the two headers contradict each other.",
-            "Decide which one is intended: a specific origin to allow authenticated access, "
-            "or drop Access-Control-Allow-Credentials to keep the wildcard.",
+            "Browsers refuse the wildcard together with credentials, so every credentialed "
+            "cross-origin request to this endpoint is rejected. Nothing is exposed by the "
+            "combination itself: whoever wanted authenticated cross-origin access does not "
+            "have it. (The wildcard's own effect on non-credentialed requests is reported "
+            "on Access-Control-Allow-Origin.)",
+            "Allowlist the specific origins that need authenticated access, or drop "
+            "Access-Control-Allow-Credentials. Do not echo back the request's Origin header "
+            "to make it work — that would let any site read logged-in users' data.",
         )
 
     if origin.lower() == 'null':
