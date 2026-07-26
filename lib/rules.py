@@ -6,6 +6,7 @@ import re
 from typing import Callable, Optional
 
 from .config import AppConfig, HeaderOverride, get_override
+from .correlations import apply_correlations
 from .csp_evaluator import evaluate_csp
 from .models import Finding, HeaderResult, Severity, is_issue
 
@@ -252,6 +253,7 @@ def analyze_headers(
             findings=findings,
         ))
 
+    apply_correlations(results)
     return results
 
 
@@ -732,14 +734,15 @@ def _check_acao(value: str, extra: dict) -> list[Finding]:
 
 
 def _check_acac(value: str, extra: dict) -> list[Finding]:
+    # "Send the cookies" says nothing without knowing to whom, so this checker
+    # states the fact and leaves the verdict to _cors_credentials in
+    # lib/correlations.py, which sees Access-Control-Allow-Origin as well.
     if value.strip().lower() == 'true':
         return [Finding(
             header='Access-Control-Allow-Credentials',
-            severity=Severity.MEDIUM,
+            severity=Severity.OK,
             title="Access-Control-Allow-Credentials: true",
-            description="Cookies and auth headers are sent cross-origin. Ensure Allow-Origin is NOT wildcard (*), "
-                        "otherwise browsers will reject the response.",
-            recommendation="Verify Access-Control-Allow-Origin is a specific origin, not *.",
+            description="Assessed together with Access-Control-Allow-Origin.",
         )]
     return [Finding('Access-Control-Allow-Credentials', Severity.OK, "Access-Control-Allow-Credentials: false (credentials not exposed)")]
 

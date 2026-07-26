@@ -369,10 +369,29 @@ can expose authenticated data, which is why it is reported as the more severe.
 
 **Required:** no — **Severity if missing:** INFO
 
-| Value | Severity | Rationale |
+`true` means "send the cookies", which says nothing on its own — it matters who
+receives them. This header is therefore graded against
+`Access-Control-Allow-Origin`, and carries a single verdict:
+
+| Access-Control-Allow-Origin | Severity | Rationale |
 |---|---|---|
-| `true` | MEDIUM | Cookies/auth headers sent cross-origin — must not be combined with `ACAO: *` |
-| `false` | OK | Credentials not exposed cross-origin |
+| `null` | **CRITICAL** | The null origin is forgeable by any page and is a concrete origin, so cookies are sent with it: an attacker's page reads this endpoint as the logged-in user |
+| `*` | MEDIUM | Browsers refuse the wildcard together with credentials, so every credentialed request is rejected. A broken configuration rather than an exposure — the two headers contradict each other |
+| A specific origin | INFO | Correct authenticated CORS. Reported so the origin can be verified — see below |
+| Absent | INFO | No origin is authorised to read the response, so credentials change nothing; usually a leftover |
+| Not evaluated (excluded by the profile) | INFO | Stated explicitly, because silence would read as approval |
+
+`false` is OK regardless of the origin.
+
+**Why a specific origin is still reported.** A response that echoes back the
+request's `Origin` header is byte-for-byte identical to one that allowlists that
+origin, and HSHA analyses a single saved response — it never issues requests, so
+it cannot tell them apart. Reflection is at least as dangerous as `null` and
+easier to exploit: the attacker just serves a page from their own domain. The
+finding therefore explains how to check, by replaying the request with an
+invented `Origin` and seeing whether it comes back. It stays INFO because that is
+a one-off verification; failing every build for it would get the whole check
+suppressed, including the cases that matter.
 
 ---
 

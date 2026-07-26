@@ -1,0 +1,109 @@
+"""Checks that need more than one header (lib/correlations.py)."""
+import pytest
+
+from lib.config import AppConfig, HeaderOverride
+from lib.models import Severity
+
+from conftest import analyze, has
+
+ACAO = "Access-Control-Allow-Origin"
+ACAC = "Access-Control-Allow-Credentials"
+
+
+def cors(origin: str | None, credentials: str | None = "true", config=None):
+    """Analyse a response with the given CORS pair and return the ACAC result."""
+    lines = []
+    if origin is not None:
+        lines.append(f"{ACAO}: {origin}")
+    if credentials is not None:
+        lines.append(f"{ACAC}: {credentials}")
+    return analyze(*lines or ["X-Nothing: x"], config=config)['access-control-allow-credentials']
+
+
+# ---------------------------------------------------------------------------
+# The verdict depends on the origin, not on the credentials header alone
+# ---------------------------------------------------------------------------
+
+def test_null_origin_with_credentials_is_critical():
+    result = cors("null")
+    assert result.worst_severity == Severity.CRITICAL
+    assert has(result.findings, "null with credentials enabled")
+
+
+def test_wildcard_with_credentials_is_a_broken_configuration():
+    result = cors("*")
+    assert result.worst_severity == Severity.MEDIUM
+    assert has(result.findings, "the request fails")
+
+
+def test_specific_origin_with_credentials_is_informational():
+    """Correct authenticated CORS must not fail a build."""
+    result = cors("https://app.example.com")
+    assert result.worst_severity == Severity.INFO
+    assert has(result.findings, "https://app.example.com")
+
+
+def test_specific_origin_finding_warns_about_origin_reflection():
+    """A reflected origin is indistinguishable from an allowlisted one in a
+    single response, so the finding has to tell the reader how to check."""
+    finding = next(f for f in cors("https://app.example.com").findings
+                   if f.severity == Severity.INFO)
+    assert "reflected" in finding.description
+    assert "Origin" in finding.recommendation
+
+
+def test_credentials_without_an_origin_have_no_effect():
+    result = cors(None)
+    assert result.worst_severity == Severity.INFO
+    assert has(result.findings, "has no effect")
+
+
+# ---------------------------------------------------------------------------
+# When the rule stays out of the way
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("credentials", ["false", "FALSE", "yes", "1"])
+def test_nothing_is_reported_unless_credentials_are_enabled(credentials):
+    result = cors("null", credentials)
+    assert result.worst_severity == Severity.OK
+
+
+def test_nothing_is_reported_when_the_header_is_absent():
+    results = analyze(f"{ACAO}: null")
+    assert results['access-control-allow-credentials'].worst_severity == Severity.INFO
+    assert has(results['access-control-allow-credentials'].findings, "Missing")
+
+
+def test_case_and_padding_are_tolerated():
+    assert cors("  NULL  ", "  TRUE  ").worst_severity == Severity.CRITICAL
+
+
+def test_a_skipped_origin_header_is_reported_as_not_assessed():
+    """Silence would read as approval, so say the check could not run."""
+    config = AppConfig(overrides={'access-control-allow-origin': HeaderOverride(skip=True)})
+    result = cors("https://app.example.com", config=config)
+    assert result.worst_severity == Severity.INFO
+    assert has(result.findings, "was not evaluated")
+
+
+def test_a_skipped_credentials_header_disables_the_rule():
+    config = AppConfig(overrides={'access-control-allow-credentials': HeaderOverride(skip=True)})
+    results = analyze(f"{ACAO}: null", f"{ACAC}: true", config=config)
+    assert 'access-control-allow-credentials' not in results
+
+
+# ---------------------------------------------------------------------------
+# Exactly one verdict per situation
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("origin", ["null", "*", "https://app.example.com", None])
+def test_the_header_carries_a_single_verdict(origin):
+    """The per-header checker stays neutral so the report has one row, not two."""
+    findings = cors(origin).findings
+    graded = [f for f in findings if f.severity > Severity.OK]
+    assert len(graded) == 1, [f.title for f in graded]
+
+
+def test_the_per_header_checker_no_longer_grades_on_its_own():
+    from lib.rules import _check_acac
+    assert all(f.severity == Severity.OK for f in _check_acac("true", {}))

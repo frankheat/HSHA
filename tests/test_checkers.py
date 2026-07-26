@@ -101,7 +101,8 @@ CASES = [
     ("Access-Control-Allow-Origin", "null", Severity.HIGH),
     ("Access-Control-Allow-Origin", "NULL", Severity.HIGH),
     ("Access-Control-Allow-Credentials", "false", Severity.OK),
-    ("Access-Control-Allow-Credentials", "true", Severity.MEDIUM),
+    # true alone, with no Access-Control-Allow-Origin in the response, has no effect
+    ("Access-Control-Allow-Credentials", "true", Severity.INFO),
 
     # --- Misc ---
     ("X-DNS-Prefetch-Control", "off", Severity.OK),
