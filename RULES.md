@@ -28,6 +28,12 @@ These checks apply to every header before any value-specific logic runs.
 |---|---|---|
 | Header absent + required | Per-header default | Missing required security header |
 | Header absent + optional | INFO | Absent but not mandatory in current profile |
+
+An optional header that is absent is reported at INFO, so it never fails a build.
+Where a specific recommendation exists for that header it is shown anyway — that
+is precisely where the finding would otherwise say nothing beyond repeating its
+own title. Marking such a header `required: true` in a profile switches it to the
+per-header severity in the tables below.
 | Header present, value is empty | Same as absent | Browsers ignore a header with no value, so the impact is identical to not sending it. Reported under its own title because an empty value usually means a misconfigured template or proxy |
 | Header sent more than once, same value | **NOTE** | Harmless: a proxy/CDN repeating an instruction the origin already sent |
 | Header sent more than once, conflicting values | **LOW** | A misconfiguration — see below |
@@ -273,7 +279,11 @@ Strict-Transport-Security:
 
 ### Cache-Control
 
-**Required:** no — **Severity if missing:** INFO
+**Required:** no — **Severity if missing:** INFO *(with no explicit caching
+instruction browsers fall back to heuristic caching and may keep the response on
+disk — harmless for a static asset, a problem for a response carrying a signed-in
+user's data, which can then be read after logout or by the next person on a
+shared machine. HSHA cannot tell the two apart, so the finding asks)*
 
 | Condition | Severity | Rationale |
 |---|---|---|

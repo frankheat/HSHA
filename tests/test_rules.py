@@ -270,3 +270,39 @@ def test_custom_header_is_still_matched_case_insensitively():
     result = analyze("x-REQUEST-id: abc", config=config)['x-request-id']
     assert result.value == 'abc'
     assert result.canonical_name == 'X-Request-Id'
+
+
+# ---------------------------------------------------------------------------
+# What an absent header actually tells the reader
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("header,key", [
+    ("Cache-Control", 'cache-control'),
+    ("Cross-Origin-Embedder-Policy", 'cross-origin-embedder-policy'),
+    ("Cross-Origin-Resource-Policy", 'cross-origin-resource-policy'),
+])
+def test_optional_headers_keep_their_written_recommendation(header, key):
+    """These are the findings that would otherwise say nothing useful."""
+    from lib.rules import _MISSING_RECS
+    finding = analyze("X-Nothing: x")[key].findings[0]
+    assert finding.severity == Severity.INFO
+    assert finding.recommendation == _MISSING_RECS[key]
+
+
+def test_optional_header_without_a_written_recommendation_stays_quiet():
+    """No generic 'add the header' nagging for headers nobody needs to add."""
+    assert analyze("X-Nothing: x")['etag'].findings[0].recommendation == ""
+
+
+def test_missing_cache_control_explains_heuristic_caching():
+    finding = analyze("X-Nothing: x")['cache-control'].findings[0]
+    assert "heuristic caching" in finding.description
+    assert "signed-in user" in finding.description
+    assert "no-store" in finding.recommendation
+
+
+def test_missing_required_header_still_gets_the_generic_fallback():
+    from lib.config import AppConfig, HeaderOverride
+    config = AppConfig(overrides={'x-dns-prefetch-control': HeaderOverride(required=True)})
+    finding = analyze("X-Nothing: x", config=config)['x-dns-prefetch-control'].findings[0]
+    assert finding.recommendation == "Add the X-DNS-Prefetch-Control header."

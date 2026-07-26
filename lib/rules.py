@@ -172,8 +172,13 @@ def analyze_headers(
                 header=canonical,
                 severity=absent_sev,
                 title=f"Missing {canonical}",
-                description=f"The {canonical} header is absent from the response.",
-                recommendation=_MISSING_RECS.get(key, f"Add the {canonical} header.") if required else "",
+                description=_MISSING_DESCRIPTIONS.get(
+                    key, f"The {canonical} header is absent from the response."),
+                # A recommendation written for this header is worth showing whether or
+                # not it is required — that is where an INFO finding would otherwise
+                # say nothing useful. Only the generic fallback is held back.
+                recommendation=_MISSING_RECS.get(
+                    key, f"Add the {canonical} header." if required else ""),
             ))
         else:
             value, dup_note = _resolve_duplicates(key, canonical, occurrences)
@@ -921,5 +926,16 @@ _MISSING_RECS: dict[str, str] = {
     'cross-origin-resource-policy':
         "Cross-Origin-Resource-Policy: same-origin",
     'cache-control':
-        "Cache-Control: no-store (for sensitive endpoints)",
+        "If this response carries data belonging to a signed-in user, send "
+        "Cache-Control: no-store.",
+}
+
+# Descriptions for headers whose absence needs more than "it is not there".
+_MISSING_DESCRIPTIONS: dict[str, str] = {
+    'cache-control':
+        "With no explicit caching instruction, browsers and intermediaries fall back to "
+        "heuristic caching and may keep this response on disk. That is harmless for a "
+        "static asset. It is a problem for a response carrying a signed-in user's data, "
+        "which can then be read from the cache after logout or by the next person to use "
+        "a shared machine.",
 }
