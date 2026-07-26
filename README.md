@@ -9,10 +9,10 @@ A CLI tool that parses raw HTTP responses and evaluates security headers against
 ## Features
 
 - Checks presence and correct configuration of security headers
-- Two built-in profiles: **basic** (11 headers) and **extended** (24+ headers)
+- Two built-in profiles: **basic** (11 headers) and **extended** (24 headers)
 - Three output formats: rich table (`text`), plain list (`list`), machine-readable (`json`)
 - Two display modes: `severity` (CRITICAL/HIGH/MEDIUM/LOW/INFO/NOTE) and `simple` (PASS/FAIL)
-- Duplicate headers resolved per header the way browsers do (first wins, last wins, join, strictest), reported as informational NOTE findings
+- Duplicate headers resolved per header the way browsers do (first wins, last wins, join, strictest); repeated identical values are a NOTE, conflicting ones a LOW finding
 - CSP deep analysis via built-in Python evaluator
 - Fully customizable via YAML config: override severities, mark headers as required/optional, assert expected values
 - Full documentation of every check, condition, and severity in [`RULES.md`](RULES.md)
@@ -65,15 +65,19 @@ Rich color-coded table with findings detail and summary.
 
 ### `--format list`
 
-Minimal output — just the names of headers with issues:
+Minimal output — just the names of headers with an issue, one per line:
 
 ```
 The following headers are missing or misconfigured:
 
-  Content-Security-Policy
-  Cross-Origin-Embedder-Policy
-  Cache-Control
+Content-Security-Policy
+Strict-Transport-Security
+Referrer-Policy
 ```
+
+Only findings of LOW or above are listed, so an optional header that is simply
+absent does not appear here — its absence is INFO. Nothing is printed when the
+response is clean.
 
 ### `--format json`
 
@@ -93,7 +97,9 @@ Shows PASS/FAIL per header with a list of issues.
 
 ### `--mode severity`
 
-Shows severity level (CRITICAL / HIGH / MEDIUM / LOW / INFO / NOTE / OK) for each header and finding. NOTE is informational only (e.g. duplicate headers) and is never counted as a failure.
+Shows severity level (CRITICAL / HIGH / MEDIUM / LOW / INFO / NOTE / OK) for each header and finding.
+
+A finding counts as an issue from LOW upwards. OK, NOTE and INFO never mark a header as FAIL and never affect the exit code — they are still printed, grouped under their own section in `--mode simple`.
 
 ---
 
@@ -105,7 +111,7 @@ The tool loads `profiles/basic.yaml` by default. Switch to the extended profile 
 # Basic profile — 11 core OWASP headers (default)
 python check_headers.py response.txt
 
-# Extended profile — 24+ headers including legacy, deprecated, CORS, caching
+# Extended profile — 24 headers including legacy, deprecated, CORS, caching
 python check_headers.py response.txt --config profiles/extended.yaml
 ```
 
@@ -175,6 +181,12 @@ headers:
 
 Valid severity values: `critical`, `high`, `medium`, `low`, `info`, `note`.
 
+Notes on the options:
+
+- `severity_if_missing` implies the header is required — an explicit `required: false` still wins.
+- `severity_if_present` yields to a real problem found by the built-in checker, which is more specific.
+- Any option that is not recognised for that header — a misspelling, or an HSTS-only option set elsewhere — is rejected when the config loads, with exit code `2`. An unrecognised option would otherwise be dropped in silence and the setting would never take effect.
+
 ---
 
 ## Exit Codes
@@ -196,9 +208,11 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-Tests that are marked `xfail` in `tests/test_known_bugs.py` document confirmed
-defects: each one asserts the intended behaviour and will start failing (as
-XPASS) once the corresponding bug is fixed.
+A confirmed defect that is not being fixed yet is recorded as a test asserting
+the behaviour the tool *should* have, marked `xfail(strict=True)` in
+`tests/test_known_bugs.py`. Strict mode turns the eventual XPASS into a failure,
+so fixing the bug forces the marker to be removed. That file is absent whenever
+there is nothing outstanding, as is the case now.
 
 ---
 
@@ -209,6 +223,7 @@ check_headers.py       # CLI entry point
 lib/
   parser.py            # HTTP response parser
   rules.py             # OWASP header rules
+  correlations.py      # Checks that need more than one header
   csp_evaluator.py     # CSP evaluation engine
   config.py            # YAML config loader
   reporter.py          # Output formatting
@@ -216,5 +231,9 @@ lib/
 profiles/
   basic.yaml           # Basic profile (default)
   extended.yaml        # Extended profile
+tests/                 # pytest suite
+RULES.md               # Every check, condition and severity
+pytest.ini
 requirements.txt
+requirements-dev.txt
 ```
