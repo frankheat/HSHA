@@ -278,9 +278,11 @@ Strict-Transport-Security:
 | Condition | Severity | Rationale |
 |---|---|---|
 | Contains `no-store` | OK | Sensitive data not stored in any cache |
-| Contains `no-cache` (without `no-store`) | INFO | Content may be stored but is revalidated before use |
+| Contains `no-cache` (without `no-store`) | OK | Content may be stored but is revalidated before use; prefer `no-store` for sensitive endpoints |
+| Contains `private` (without `no-store` or `no-cache`) | OK | Shared caches must not store the response; the browser still may |
 | Contains `public` | INFO | Shared caches (CDN, proxies) are allowed — verify intentionality |
-| Any other value | INFO | Informational |
+| Only standard directives, none of the above | OK | Valid caching directives |
+| Contains a token that is not a standard directive | INFO | Likely a typo or a non-standard extension; browsers ignore it |
 
 ---
 
@@ -445,7 +447,7 @@ suppressed, including the cases that matter.
 | Value | Severity | Rationale |
 |---|---|---|
 | Starts with `attachment` | OK | Download forced — prevents inline execution |
-| Starts with `inline` | INFO | Browser attempts inline rendering |
+| Starts with `inline` | OK | Browser renders the content inline; benign in itself, but `attachment` is safer for file downloads |
 | Any other value | INFO | Unrecognized value |
 
 ---
@@ -456,8 +458,8 @@ suppressed, including the cases that matter.
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `no-cache` | INFO | Legacy HTTP/1.0 header, superseded by `Cache-Control` |
-| Any other value | INFO | Legacy header |
+| `no-cache` | OK | Legacy HTTP/1.0 header, superseded by `Cache-Control`; harmless |
+| Any other value | OK | Legacy header; harmless |
 
 ---
 
@@ -468,7 +470,7 @@ suppressed, including the cases that matter.
 | Value | Severity | Rationale |
 |---|---|---|
 | `0` or `-1` | OK | Immediately expired — no caching |
-| Any other value | INFO | Legacy HTTP/1.0 caching header, superseded by `Cache-Control: max-age` |
+| Any other value | OK | Legacy HTTP/1.0 caching header, superseded by `Cache-Control: max-age`; harmless |
 
 ---
 
@@ -478,8 +480,8 @@ suppressed, including the cases that matter.
 
 | Condition | Severity | Rationale |
 |---|---|---|
-| Starts with `W/` | INFO | Weak validator present |
-| Any other value | INFO | Strong validator present |
+| Starts with `W/` | OK | Weak validator present |
+| Any other value | OK | Strong validator present |
 
 ---
 
@@ -500,7 +502,7 @@ suppressed, including the cases that matter.
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `0` | INFO | Deprecated header correctly disabled — consider removing entirely |
+| `0` | OK | Deprecated header correctly disabled — consider removing entirely |
 | `1; mode=block` | LOW | Deprecated and `mode=block` can cause info leaks in old browsers |
 | Any other value | INFO | Deprecated header |
 
