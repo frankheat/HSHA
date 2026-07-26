@@ -76,7 +76,8 @@ def _resolve_duplicates(
     if len(values) == 1:
         return values[0], None
 
-    if len({v.strip().lower() for v in values}) == 1:
+    identical = len({v.strip().lower() for v in values}) == 1
+    if identical:
         effective = values[0]
         behavior = "the duplicate values are identical"
     else:
@@ -94,17 +95,30 @@ def _resolve_duplicates(
             effective = values[0]
             behavior = "browsers honor the first value"
 
-    note = Finding(
+    seen = f"Values sent: {'; '.join(values)}. Evaluated as '{effective}' because {behavior}."
+
+    # Repeating the same value is harmless noise. Contradictory values are a
+    # misconfiguration: one component's intent is silently discarded, and which
+    # one wins is a resolution rule rather than anything the site chose.
+    if identical:
+        return effective, Finding(
+            header=canonical,
+            severity=Severity.NOTE,
+            title=f"{canonical}: header sent {len(values)} times",
+            description=seen,
+            recommendation=f"Configure the server (and any proxy/CDN) to send {canonical} only once.",
+        )
+
+    return effective, Finding(
         header=canonical,
-        severity=Severity.NOTE,
-        title=f"{canonical}: header sent {len(values)} times",
+        severity=Severity.LOW,
+        title=f"{canonical}: sent {len(values)} times with conflicting values",
         description=(
-            f"Duplicate values: {'; '.join(values)}. "
-            f"Evaluated as '{effective}' because {behavior}."
+            f"{seen} Whichever component set a discarded value is operating on a false "
+            "assumption, and the resolution is not guaranteed to be identical in every browser."
         ),
-        recommendation=f"Configure the server (and any proxy/CDN) to send {canonical} only once.",
+        recommendation=f"Decide which value is intended, then send {canonical} once.",
     )
-    return effective, note
 
 
 def _parse_severity(value: str | None, default: Severity) -> Severity:

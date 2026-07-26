@@ -29,7 +29,8 @@ These checks apply to every header before any value-specific logic runs.
 | Header absent + required | Per-header default | Missing required security header |
 | Header absent + optional | INFO | Absent but not mandatory in current profile |
 | Header present, value is empty | Same as absent | Browsers ignore a header with no value, so the impact is identical to not sending it. Reported under its own title because an empty value usually means a misconfigured template or proxy |
-| Header sent more than once | **NOTE** | Duplicates usually come from a proxy/CDN adding its own copy; the effective value is resolved as described below and checks run against it |
+| Header sent more than once, same value | **NOTE** | Harmless: a proxy/CDN repeating an instruction the origin already sent |
+| Header sent more than once, conflicting values | **LOW** | A misconfiguration — see below |
 
 ### Duplicate headers
 
@@ -44,8 +45,23 @@ effective value the same way browsers do, then evaluates that value:
 | Join | `Content-Security-Policy`, `Cache-Control`, `Clear-Site-Data`, `Permissions-Policy`, `Pragma` | Occurrences combine into a single list/policy set |
 | Strictest | `X-Frame-Options` | Conflicting values make browsers block framing — evaluated as `DENY` |
 
-The NOTE finding always reports the original values, the effective value
-chosen, and why.
+The finding always reports the original values, the effective value chosen, and
+why.
+
+**Why conflicting values are a finding of their own.** Repeating the same value
+is noise. Contradictory values mean two components disagree — typically the
+application and a CDN or WAF in front of it — and the resolution silently
+discards one of them, so whoever configured the losing value is operating on a
+false assumption. The winning value is also decided by a resolution rule rather
+than by anything the site chose, and that resolution is not guaranteed to be
+identical in every browser.
+
+The severity is deliberately LOW rather than higher: the resolved value is
+usually the safe one, so this is a configuration defect to fix rather than an
+exposure. It is reported even when the resolved value is perfectly good — for
+example `X-Frame-Options: deny` plus `sameorigin` resolves to `DENY`, which is
+optimal, but the site did not choose it and a change in header ordering could
+change the outcome.
 
 ---
 
