@@ -332,11 +332,30 @@ The following headers are checked only when using `profiles/extended.yaml`.
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `*` | MEDIUM | Any origin can read the response — dangerous with sensitive data |
+| `*` | MEDIUM | Any site can read the response — see below |
 | `null` | **HIGH** | Forgeable by any attacker and, unlike `*`, usable with credentials — see below |
 | More than one origin (`https://a.example, https://b.example`) | INFO | The header carries exactly one origin, `*` or `null`. A list never matches the requesting origin, so the CORS check fails and no site gets access, including the intended ones. Fails closed, so it is a broken configuration rather than an exposure. Usually means two components are both setting the header — typically the application and a proxy in front of it |
 | `http://` origin | LOW | The allowed origin is not protected by TLS, so anyone able to tamper with traffic to it can impersonate it and read what this endpoint returns to it. A `localhost` origin here usually means a development configuration reached production |
 | Specific `https://` origin | OK | Correctly restricted to a trusted origin |
+
+#### When the wildcard actually costs something
+
+On a genuinely public endpoint `*` costs nothing — that is what the wildcard is
+for, and public APIs, CDNs and font services set it on purpose.
+
+It matters when the endpoint is **reachable by a victim's browser but not by an
+attacker's server**: an internal API, a service on `localhost`, a device admin
+page, anything authorised by network location or source IP rather than by
+credentials. Without the wildcard, a browser will send such a cross-origin
+request but refuses to hand the response back to the calling page. With it, an
+attacker's page reads the answer through the browser of whoever can reach the
+endpoint — the victim's browser becomes a tunnel into a network the attacker
+cannot otherwise touch.
+
+HSHA reads a saved response, so it cannot tell the two situations apart: it sees
+the header, not where the endpoint lives or what the body holds. The finding
+stays MEDIUM and asks the question the reader has to answer — is this endpoint
+reachable from anywhere, or only from certain networks?
 
 #### Why `null` outranks `*`
 

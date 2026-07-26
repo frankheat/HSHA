@@ -715,8 +715,17 @@ def _check_acao(value: str, extra: dict) -> list[Finding]:
             header='Access-Control-Allow-Origin',
             severity=Severity.MEDIUM,
             title="Access-Control-Allow-Origin: * (wildcard)",
-            description="Any origin can read this response. Dangerous if the response contains sensitive data.",
-            recommendation="Restrict to specific trusted origins: Access-Control-Allow-Origin: https://trusted.example.com",
+            description="Any site can read this response. That costs nothing if the endpoint is "
+                        "genuinely public, which is what the wildcard is for. It matters when the "
+                        "endpoint is reachable by a victim's browser but not by an attacker's "
+                        "server — an internal API, a service on localhost, a device admin page, "
+                        "anything authorised by network or IP rather than by credentials. Without "
+                        "the wildcard a browser sends such a request but refuses to hand the "
+                        "response to the calling page; with it, an attacker's page reads the "
+                        "answer through the browser of whoever can reach the endpoint.",
+            recommendation="Check whether this endpoint is reachable from anywhere or only from "
+                           "certain networks. If access is limited in any way, name the origins "
+                           "allowed to read it instead of using '*'.",
         )]
     if n.lower() == 'null':
         return [Finding(

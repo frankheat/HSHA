@@ -230,3 +230,12 @@ def test_acao_plaintext_origin_is_reported_before_the_ok_branch():
 
 def test_acao_https_origin_stays_ok():
     assert severity_for("Access-Control-Allow-Origin", "https://app.example.com") == Severity.OK
+
+
+def test_acao_wildcard_names_the_case_that_actually_matters():
+    """The old text only mentioned sensitive data, so a reader with an internal
+    API concluded it did not apply to them."""
+    finding = findings_for("Access-Control-Allow-Origin", "*")[0]
+    assert finding.severity == Severity.MEDIUM
+    assert "not by an attacker's server" in finding.description
+    assert "reachable" in finding.recommendation
