@@ -247,8 +247,8 @@ from what each value discloses, and is this tool's own.
 | `strict-origin`, `strict-origin-when-cross-origin` | OK | Only the origin is sent cross-origin, and nothing on a downgrade to plain HTTP |
 | `origin`, `origin-when-cross-origin` | INFO | Only the origin, never the path or query — the same information the OK values above hand to every third party over HTTPS, but sent to plain-HTTP destinations too. Reported, not counted as a failure |
 | `no-referrer-when-downgrade` | **HIGH** | Sends the **full URL** to every third party over HTTPS. It withholds it only on a downgrade to plain HTTP — the one case browsers increasingly prevent anyway |
-| `unsafe-url`, `always` | **HIGH** | Sends the full URL to everyone, plain-HTTP destinations included, where anyone on the network can read it |
-| Any other value | INFO | Unrecognized value; browsers fall back to their default policy |
+| `unsafe-url` | **HIGH** | Sends the full URL to everyone, plain-HTTP destinations included, where anyone on the network can read it |
+| Any other value, `always` included | **LOW** | The grammar defines eight tokens and browsers skip anything else, falling back to their own default exactly as if the header had not been sent — so no policy is in force, and nothing in the response says so. `always` belonged to the old `<meta name="referrer">` syntax, never to this header |
 
 **Why `no-referrer-when-downgrade` is graded like `unsafe-url`.** Both hand the
 complete URL — path and query string included — to every third party reached over

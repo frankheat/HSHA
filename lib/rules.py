@@ -607,7 +607,9 @@ def _check_referrer_policy(value: str, extra: dict) -> list[Finding]:
     sends_nothing = {'no-referrer', 'same-origin'}
     sends_origin = {'strict-origin', 'strict-origin-when-cross-origin'}
     origin_in_clear = {'origin', 'origin-when-cross-origin'}
-    full_url = {'no-referrer-when-downgrade', 'unsafe-url', 'always'}
+    # 'always' is not one of them: it belonged to the old <meta name="referrer">
+    # syntax, never to this header, so browsers skip it like any unknown token.
+    full_url = {'no-referrer-when-downgrade', 'unsafe-url'}
 
     if n in sends_nothing:
         return [Finding('Referrer-Policy', Severity.OK,
@@ -647,7 +649,21 @@ def _check_referrer_policy(value: str, extra: dict) -> list[Finding]:
             recommendation="Use no-referrer, or strict-origin-when-cross-origin to send no more "
                            "than the origin.",
         )]
-    return [Finding('Referrer-Policy', Severity.INFO, f"Referrer-Policy: unrecognized value '{value}'")]
+    # Same outcome as sending no header at all, so it is graded as a problem
+    # rather than a remark — and the site is worse off than if it had not tried,
+    # because it believes a policy is in force.
+    return [Finding(
+        header='Referrer-Policy',
+        severity=Severity.LOW,
+        title=f"Referrer-Policy: unrecognized value '{value}' — no policy is in force",
+        description="A token that is not one of the eight defined policies is skipped, so the "
+                    "browser falls back to its own default exactly as if the header had not been "
+                    "sent. The policy intended here is not applied, and nothing in the response "
+                    "reveals that.",
+        recommendation="Check the spelling. The defined values are no-referrer, "
+                       "no-referrer-when-downgrade, same-origin, origin, strict-origin, "
+                       "origin-when-cross-origin, strict-origin-when-cross-origin, unsafe-url.",
+    )]
 
 
 # Standard Cache-Control directives (response context); token before any '='.
@@ -1054,6 +1070,13 @@ _MISSING_RECS: dict[str, str] = {
 
 # Descriptions for headers whose absence needs more than "it is not there".
 _MISSING_DESCRIPTIONS: dict[str, str] = {
+    'referrer-policy':
+        "With no policy of its own, the response inherits whatever default the browser "
+        "applies — something the site does not control and that has already changed once. "
+        "Current browsers use strict-origin-when-cross-origin, which sends no more than the "
+        "origin; older ones send the complete URL, path and query string included, to every "
+        "third party reached over HTTPS. Stating the policy makes every browser behave the "
+        "same.",
     'cache-control':
         "With no explicit caching instruction, browsers and intermediaries fall back to "
         "heuristic caching and may keep this response on disk. That is harmless for a "

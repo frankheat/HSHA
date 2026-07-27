@@ -3,7 +3,7 @@ import pytest
 
 from lib.models import Severity
 
-from conftest import findings_for, has, severity_for
+from conftest import analyze, findings_for, has, severity_for
 
 _PP_HIGH = ['camera', 'microphone', 'geolocation', 'payment', 'usb', 'display-capture']
 _PP_MEDIUM = ['accelerometer', 'gyroscope', 'magnetometer', 'midi', 'screen-wake-lock',
@@ -62,8 +62,8 @@ CASES = [
     ("Referrer-Policy", "same-origin", Severity.OK),
     ("Referrer-Policy", "no-referrer-when-downgrade", Severity.HIGH),
     ("Referrer-Policy", "unsafe-url", Severity.HIGH),
-    ("Referrer-Policy", "always", Severity.HIGH),
-    ("Referrer-Policy", "bogus", Severity.INFO),
+    ("Referrer-Policy", "always", Severity.LOW),    # legacy meta value, not a header token
+    ("Referrer-Policy", "bogus", Severity.LOW),
 
     # --- X-Permitted-Cross-Domain-Policies ---
     ("X-Permitted-Cross-Domain-Policies", "none", Severity.OK),
@@ -346,3 +346,24 @@ def test_referrer_policy_same_origin_is_strong():
     """It sends nothing at all cross-origin — less than
     strict-origin-when-cross-origin, which sends the origin."""
     assert severity_for("Referrer-Policy", "same-origin") == Severity.OK
+
+
+def test_referrer_policy_always_is_not_a_header_token():
+    """'always' belonged to <meta name="referrer">; the header grammar defines
+    eight tokens and skips anything else, so the browser default applies."""
+    findings = findings_for("Referrer-Policy", "always")
+    assert findings[0].severity == Severity.LOW
+    assert has(findings, "unrecognized value")
+
+
+def test_referrer_policy_unrecognized_value_explains_the_fallback():
+    finding = findings_for("Referrer-Policy", "bogus")[0]
+    assert "falls back to its own default" in finding.description
+    assert "no-referrer-when-downgrade" in finding.recommendation
+
+
+def test_missing_referrer_policy_explains_the_browser_default():
+    finding = analyze("X-Nothing: x")['referrer-policy'].findings[0]
+    assert finding.severity == Severity.MEDIUM
+    assert "strict-origin-when-cross-origin" in finding.description
+    assert "does not control" in finding.description
