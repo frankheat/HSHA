@@ -28,15 +28,15 @@ These checks apply to every header before any value-specific logic runs.
 |---|---|---|
 | Header absent + required | Per-header default | Missing required security header |
 | Header absent + optional | INFO | Absent but not mandatory in current profile |
+| Header present, value is empty | Same as absent | Browsers ignore a header with no value, so the impact is identical to not sending it. Reported under its own title because an empty value usually means a misconfigured template or proxy |
+| Header sent more than once, same value | **NOTE** | Harmless: a proxy/CDN repeating an instruction the origin already sent |
+| Header sent more than once, conflicting values | **LOW** | A misconfiguration — see below |
 
 An optional header that is absent is reported at INFO, so it never fails a build.
 Where a specific recommendation exists for that header it is shown anyway — that
 is precisely where the finding would otherwise say nothing beyond repeating its
 own title. Marking such a header `required: true` in a profile switches it to the
 per-header severity in the tables below.
-| Header present, value is empty | Same as absent | Browsers ignore a header with no value, so the impact is identical to not sending it. Reported under its own title because an empty value usually means a misconfigured template or proxy |
-| Header sent more than once, same value | **NOTE** | Harmless: a proxy/CDN repeating an instruction the origin already sent |
-| Header sent more than once, conflicting values | **LOW** | A misconfiguration — see below |
 
 ### Duplicate headers
 
@@ -510,8 +510,6 @@ suppressed, including the cases that matter.
 
 **Required:** no — **Severity if missing:** INFO
 
-| Value | Severity | Rationale |
-|---|---|---|
 The value is a flag (`0` or `1`) optionally followed by directives, and only the
 flag decides the verdict — a digit inside a directive such as `report=1` is not
 one.
