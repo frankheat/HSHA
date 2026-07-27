@@ -271,3 +271,71 @@ def test_disabled_filter_stays_ok_with_trailing_directives():
 def test_a_digit_inside_a_directive_is_not_the_flag():
     """Regression: 'report=1; mode=block' used to match the substring '1'."""
     assert severity_for("X-XSS-Protection", "report=1; mode=block") == Severity.INFO
+
+
+# ---------------------------------------------------------------------------
+# Directive names read as names, not searched for in the raw value
+# ---------------------------------------------------------------------------
+
+def test_qualified_no_cache_is_not_the_same_as_a_bare_one():
+    """no-cache="Set-Cookie" only covers that field: the rest of the response
+    may be served from cache without revalidation (RFC 9111)."""
+    findings = findings_for("Cache-Control", 'no-cache="Set-Cookie"')
+    assert findings[0].severity == Severity.INFO
+    assert has(findings, "limited to 'Set-Cookie'")
+
+
+def test_qualified_private_is_not_the_same_as_a_bare_one():
+    findings = findings_for("Cache-Control", 'private="X-Custom"')
+    assert findings[0].severity == Severity.INFO
+    assert has(findings, "limited to 'X-Custom'")
+
+
+@pytest.mark.parametrize("value", ["no-store", "no-cache", "private"])
+def test_bare_cache_directives_are_still_ok(value):
+    assert severity_for("Cache-Control", value) == Severity.OK
+
+
+def test_a_token_merely_containing_a_directive_name_is_unrecognised():
+    """'x-no-store-hack' used to be reported as no-store."""
+    findings = findings_for("Cache-Control", "x-no-store-hack")
+    assert findings[0].severity == Severity.INFO
+    assert has(findings, "unrecognized directive")
+
+
+def test_a_quoted_comma_does_not_split_a_directive():
+    assert severity_for("Cache-Control", 'no-cache="X-A,X-B"') == Severity.INFO
+
+
+@pytest.mark.parametrize("value", [
+    "max-age=31536000; includeSubDomainss",     # doubled letter
+    "max-age=31536000; xincludeSubDomains",     # spurious prefix
+    "max-age=31536000; report-uri=https://x/includeSubDomains",
+])
+def test_hsts_only_accepts_the_real_directive_name(value):
+    """A misspelled directive is an unrecognised one: browsers ignore it, so
+    subdomains stay unprotected and that has to be reported."""
+    assert has(findings_for("Strict-Transport-Security", value), "missing includeSubDomains")
+
+
+def test_hsts_accepts_a_quoted_max_age():
+    """RFC 6797 §6.1: directive-value = token / quoted-string."""
+    value = 'max-age="31536000"; includeSubDomains'
+    assert severity_for("Strict-Transport-Security", value) == Severity.OK
+
+
+def test_hsts_rejects_a_non_numeric_max_age():
+    assert has(findings_for("Strict-Transport-Security", "max-age=forever"), "missing max-age")
+
+
+def test_permissions_policy_wildcard_is_read_from_the_allowlist():
+    """A \\b boundary also matches after the hyphen of an unrelated name, so
+    'x-payment=*' used to be reported as a wildcard on 'payment'."""
+    declared = ", ".join(f"{f}=()" for f in _PP_HIGH + _PP_MEDIUM)
+    assert severity_for("Permissions-Policy", declared + ", x-payment=*") == Severity.OK
+    assert severity_for("Permissions-Policy", declared.replace("payment=()", "payment=*")) == Severity.MEDIUM
+
+
+def test_content_disposition_type_is_the_first_token():
+    assert severity_for("Content-Disposition", 'attachment; filename="inline.pdf"') == Severity.OK
+    assert severity_for("Content-Disposition", "attachmentx") == Severity.INFO

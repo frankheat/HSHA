@@ -322,20 +322,65 @@ def _validate_value(
 # Individual header checkers
 # ---------------------------------------------------------------------------
 
+def _split_outside_quotes(value: str, separator: str) -> list[str]:
+    """
+    Split on `separator`, ignoring separators inside a quoted-string.
+
+    Header values carry quoted arguments — `no-cache="Set-Cookie"`, and any
+    directive value may be quoted per RFC 6797 §6.1 — so a plain split would cut
+    a quoted value containing the separator in half.
+    """
+    parts: list[str] = []
+    current: list[str] = []
+    in_quotes = False
+    for char in value:
+        if char == '"':
+            in_quotes = not in_quotes
+        if char == separator and not in_quotes:
+            parts.append(''.join(current))
+            current = []
+        else:
+            current.append(char)
+    parts.append(''.join(current))
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _parse_directives(value: str, separator: str) -> dict[str, Optional[str]]:
+    """
+    Split a header value into `{directive name: argument}`, lowercasing names and
+    unquoting arguments. A directive with no argument maps to None.
+
+    Reading the names is what tells `includeSubDomains` apart from a misspelling
+    of it, or from the same word appearing inside some other directive's value.
+    """
+    directives: dict[str, Optional[str]] = {}
+    for token in _split_outside_quotes(value, separator):
+        name, sep, argument = token.partition('=')
+        name = name.strip().lower()
+        if not name:
+            continue
+        argument = argument.strip() if sep else None
+        if argument and len(argument) >= 2 and argument[0] == '"' and argument[-1] == '"':
+            argument = argument[1:-1]
+        directives[name] = argument
+    return directives
+
+
 def _check_hsts(value: str, extra: dict) -> list[Finding]:
     findings: list[Finding] = []
-    m = re.search(r'max-age\s*=\s*(\d+)', value, re.IGNORECASE)
+    directives = _parse_directives(value, ';')
+    raw_max_age = directives.get('max-age')
 
-    if not m:
+    if raw_max_age is None or not raw_max_age.isdigit():
         return [Finding(
             header='Strict-Transport-Security',
             severity=Severity.HIGH,
             title="HSTS: missing max-age",
-            description="The max-age directive is required.",
+            description="The max-age directive is required, with a value in seconds.",
             recommendation="Strict-Transport-Security: max-age=31536000; includeSubDomains",
         )]
 
-    max_age = int(m.group(1))
+    max_age = int(raw_max_age)
     try:
         min_age = int(extra.get('min_max_age', 31536000))
     except (TypeError, ValueError):
@@ -360,7 +405,7 @@ def _check_hsts(value: str, extra: dict) -> list[Finding]:
             recommendation=f"Set max-age to at least {min_age}.",
         ))
 
-    if extra.get('require_include_subdomains', True) and 'includesubdomains' not in value.lower():
+    if extra.get('require_include_subdomains', True) and 'includesubdomains' not in directives:
         findings.append(Finding(
             header='Strict-Transport-Security',
             severity=Severity.LOW,
@@ -369,7 +414,7 @@ def _check_hsts(value: str, extra: dict) -> list[Finding]:
             recommendation="Add includeSubDomains directive.",
         ))
 
-    if extra.get('require_preload', False) and 'preload' not in value.lower():
+    if extra.get('require_preload', False) and 'preload' not in directives:
         findings.append(Finding(
             header='Strict-Transport-Security',
             severity=Severity.LOW,
@@ -497,12 +542,13 @@ _PP_MEDIUM_RISK = {
 }
 
 
-def _parse_pp_features(value: str) -> set[str]:
-    features = set()
+def _parse_pp_features(value: str) -> dict[str, str]:
+    """Map each declared feature to its allowlist, e.g. {'camera': '()'}."""
+    features: dict[str, str] = {}
     for part in value.split(','):
-        part = part.strip()
-        if '=' in part:
-            features.add(part.split('=')[0].strip().lower())
+        name, sep, allowlist = part.strip().partition('=')
+        if sep:
+            features[name.strip().lower()] = allowlist.strip()
     return features
 
 
@@ -511,11 +557,9 @@ def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:
     all_sensitive = _PP_HIGH_RISK | _PP_MEDIUM_RISK
     declared = _parse_pp_features(value)
 
-    # Wildcard check
-    wildcarded = [
-        f for f in all_sensitive
-        if re.search(rf'\b{re.escape(f)}\s*=\s*\*', value, re.IGNORECASE)
-    ]
+    # Read the allowlist of each declared feature rather than searching the raw
+    # value: a \b boundary also matches after the hyphen of an unrelated name.
+    wildcarded = sorted(f for f in all_sensitive if declared.get(f) == '*')
     if wildcarded:
         findings.append(Finding(
             header='Permissions-Policy',
@@ -526,8 +570,8 @@ def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:
         ))
 
     # Completeness check: sensitive features not mentioned are allowed by default
-    missing_high = _PP_HIGH_RISK - declared
-    missing_medium = _PP_MEDIUM_RISK - declared
+    missing_high = _PP_HIGH_RISK - set(declared)
+    missing_medium = _PP_MEDIUM_RISK - set(declared)
 
     if missing_high:
         findings.append(Finding(
@@ -590,28 +634,57 @@ _CACHE_CONTROL_DIRECTIVES = {
 
 def _check_cache_control(value: str, extra: dict) -> list[Finding]:
     findings: list[Finding] = []
-    lower = value.lower()
+    # Directive names have to be read as names: searching the raw value for
+    # 'no-store' also matches a token that merely contains it, and misses the
+    # difference between `no-cache` and the far weaker `no-cache="Some-Header"`.
+    directives = _parse_directives(value, ',')
 
-    if 'no-store' in lower:
+    if 'no-store' in directives:
         findings.append(Finding('Cache-Control', Severity.OK, "Cache-Control: no-store (sensitive data not cached)"))
-    elif 'no-cache' in lower:
-        findings.append(Finding(
-            header='Cache-Control',
-            severity=Severity.OK,
-            title="Cache-Control: no-cache (revalidated before use)",
-            description="Content may be stored but will be revalidated with the server.",
-            recommendation="For sensitive endpoints prefer no-store.",
-        ))
-    elif 'private' in lower:
-        findings.append(Finding(
-            header='Cache-Control',
-            severity=Severity.OK,
-            title="Cache-Control: private (shared caches must not store the response)",
-            description="Only the user's browser may cache the response; shared caches (proxies, CDNs) will not.",
-            recommendation="For highly sensitive responses prefer no-store (the browser can still cache 'private' to disk).",
-        ))
+    elif 'no-cache' in directives:
+        if directives['no-cache']:
+            findings.append(Finding(
+                header='Cache-Control',
+                severity=Severity.INFO,
+                title=f"Cache-Control: no-cache is limited to '{directives['no-cache']}'",
+                description="With an argument, no-cache only covers the header fields it names: a "
+                            "cache may serve the rest of the response without revalidating it "
+                            "(RFC 9111). That is much weaker than a bare no-cache, and support "
+                            "for the qualified form varies between caches.",
+                recommendation="Use a bare no-cache, or no-store, if the whole response must not "
+                               "be served from cache unchecked.",
+            ))
+        else:
+            findings.append(Finding(
+                header='Cache-Control',
+                severity=Severity.OK,
+                title="Cache-Control: no-cache (revalidated before use)",
+                description="Content may be stored but will be revalidated with the server.",
+                recommendation="For sensitive endpoints prefer no-store.",
+            ))
+    elif 'private' in directives:
+        if directives['private']:
+            findings.append(Finding(
+                header='Cache-Control',
+                severity=Severity.INFO,
+                title=f"Cache-Control: private is limited to '{directives['private']}'",
+                description="With an argument, private only covers the header fields it names: a "
+                            "shared cache may store the rest of the response (RFC 9111). That is "
+                            "the opposite of what a bare private means, and support for the "
+                            "qualified form varies between caches.",
+                recommendation="Use a bare private, or no-store, to keep the whole response out "
+                               "of shared caches.",
+            ))
+        else:
+            findings.append(Finding(
+                header='Cache-Control',
+                severity=Severity.OK,
+                title="Cache-Control: private (shared caches must not store the response)",
+                description="Only the user's browser may cache the response; shared caches (proxies, CDNs) will not.",
+                recommendation="For highly sensitive responses prefer no-store (the browser can still cache 'private' to disk).",
+            ))
 
-    if 'public' in lower:
+    if 'public' in directives:
         findings.append(Finding(
             header='Cache-Control',
             severity=Severity.INFO,
@@ -620,8 +693,7 @@ def _check_cache_control(value: str, extra: dict) -> list[Finding]:
         ))
 
     if not findings:
-        tokens = {t.split('=')[0].strip() for t in lower.split(',') if t.strip()}
-        unknown = tokens - _CACHE_CONTROL_DIRECTIVES
+        unknown = set(directives) - _CACHE_CONTROL_DIRECTIVES
         if unknown:
             findings.append(Finding(
                 header='Cache-Control',
@@ -827,10 +899,11 @@ def _check_service_worker_allowed(value: str, extra: dict) -> list[Finding]:
 
 
 def _check_content_disposition(value: str, extra: dict) -> list[Finding]:
-    lower = value.strip().lower()
-    if lower.startswith('attachment'):
+    # The disposition type is the first token; 'attachmentx' is not 'attachment'.
+    lower = value.split(';')[0].strip().lower()
+    if lower == 'attachment':
         return [Finding('Content-Disposition', Severity.OK, "Content-Disposition: attachment (prevents inline rendering)")]
-    if lower.startswith('inline'):
+    if lower == 'inline':
         return [Finding(
             header='Content-Disposition',
             severity=Severity.OK,

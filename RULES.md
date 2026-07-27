@@ -174,10 +174,10 @@ effective policy is their intersection. Findings combine as follows:
 
 | Condition | Severity | Rationale |
 |---|---|---|
-| `max-age` directive missing | HIGH | `max-age` is required for HSTS to function |
+| `max-age` directive missing, or its value is not a number | HIGH | `max-age` is required for HSTS to function. The value may be quoted (`max-age="31536000"`), which RFC 6797 §6.1 allows |
 | `max-age=0` | HIGH | Explicitly revokes HSTS — browsers delete the entry |
 | `max-age` < threshold *(default: 31536000s / 1 year)* | MEDIUM | Short values reduce protection window against SSL-stripping |
-| `includeSubDomains` missing *(configurable)* | LOW | Subdomains remain vulnerable to SSL-stripping attacks |
+| `includeSubDomains` missing *(configurable)* | LOW | Subdomains remain vulnerable to SSL-stripping attacks. The directive name is matched as a name, so a misspelling such as `includeSubDomainss` counts as missing — browsers ignore an unrecognised directive, leaving subdomains unprotected |
 | `preload` missing *(extended profile only)* | LOW | Site cannot be submitted to browser HSTS preload lists |
 
 Threshold values are configurable in the profile:
@@ -289,7 +289,9 @@ shared machine. HSHA cannot tell the two apart, so the finding asks)*
 |---|---|---|
 | Contains `no-store` | OK | Sensitive data not stored in any cache |
 | Contains `no-cache` (without `no-store`) | OK | Content may be stored but is revalidated before use; prefer `no-store` for sensitive endpoints |
+| `no-cache="Field"` — the qualified form | INFO | With an argument the directive only covers the fields it names, so a cache may serve the rest of the response without revalidating it (RFC 9111). Much weaker than a bare `no-cache`, and support for the qualified form varies between caches |
 | Contains `private` (without `no-store` or `no-cache`) | OK | Shared caches must not store the response; the browser still may |
+| `private="Field"` — the qualified form | INFO | Only the named fields are private: a shared cache may store the rest of the response — the opposite of what a bare `private` means |
 | Contains `public` | INFO | Shared caches (CDN, proxies) are allowed — verify intentionality |
 | Only standard directives, none of the above | OK | Valid caching directives |
 | Contains a token that is not a standard directive | INFO | Likely a typo or a non-standard extension; browsers ignore it |
@@ -456,8 +458,8 @@ suppressed, including the cases that matter.
 
 | Value | Severity | Rationale |
 |---|---|---|
-| Starts with `attachment` | OK | Download forced — prevents inline execution |
-| Starts with `inline` | OK | Browser renders the content inline; benign in itself, but `attachment` is safer for file downloads |
+| `attachment` (with any parameters) | OK | Download forced — prevents inline execution |
+| `inline` (with any parameters) | OK | Browser renders the content inline; benign in itself, but `attachment` is safer for file downloads |
 | Any other value | INFO | Unrecognized value |
 
 ---
