@@ -62,8 +62,8 @@ CASES = [
     ("Referrer-Policy", "same-origin", Severity.OK),
     ("Referrer-Policy", "no-referrer-when-downgrade", Severity.HIGH),
     ("Referrer-Policy", "unsafe-url", Severity.HIGH),
-    ("Referrer-Policy", "always", Severity.LOW),    # legacy meta value, not a header token
-    ("Referrer-Policy", "bogus", Severity.LOW),
+    ("Referrer-Policy", "always", Severity.MEDIUM),  # legacy meta value, not a header token
+    ("Referrer-Policy", "bogus", Severity.MEDIUM),   # same effect as sending no header
 
     # --- X-Permitted-Cross-Domain-Policies ---
     ("X-Permitted-Cross-Domain-Policies", "none", Severity.OK),
@@ -352,7 +352,7 @@ def test_referrer_policy_always_is_not_a_header_token():
     """'always' belonged to <meta name="referrer">; the header grammar defines
     eight tokens and skips anything else, so the browser default applies."""
     findings = findings_for("Referrer-Policy", "always")
-    assert findings[0].severity == Severity.LOW
+    assert findings[0].severity == Severity.MEDIUM
     assert has(findings, "unrecognized value")
 
 
@@ -367,3 +367,19 @@ def test_missing_referrer_policy_explains_the_browser_default():
     assert finding.severity == Severity.MEDIUM
     assert "strict-origin-when-cross-origin" in finding.description
     assert "does not control" in finding.description
+
+
+def test_referrer_policy_invalid_value_weighs_the_same_as_an_absent_header():
+    """The browser falls back to its default either way, so the two match."""
+    absent = analyze("X-Nothing: x")['referrer-policy'].worst_severity
+    assert severity_for("Referrer-Policy", "bogus") == absent
+
+
+def test_referrer_policy_invalid_value_follows_a_config_override():
+    """Not a hardcoded MEDIUM: it tracks whatever absence would score."""
+    from lib.config import AppConfig, HeaderOverride
+    config = AppConfig(overrides={
+        'referrer-policy': HeaderOverride(severity_if_missing='high'),
+    })
+    assert analyze("X-Nothing: x", config=config)['referrer-policy'].worst_severity == Severity.HIGH
+    assert severity_for("Referrer-Policy", "bogus", config) == Severity.HIGH

@@ -197,7 +197,7 @@ def analyze_headers(
                     recommendation=_MISSING_RECS.get(key, f"Set a valid value for {canonical}."),
                 ))
             else:
-                findings.extend(_validate_value(key, canonical, value, override))
+                findings.extend(_validate_value(key, canonical, value, override, absent_sev))
 
         results.append(HeaderResult(
             name=key,
@@ -262,11 +262,19 @@ def analyze_headers(
     return results
 
 
+# Reserved key injected into a checker's `extra`, never settable from a config
+# file (unknown options are rejected at load time). It carries the severity the
+# header would get if it were absent, for checkers that need to report a value
+# whose effect is identical to sending no header at all.
+ABSENT_SEVERITY = '_absent_severity'
+
+
 def _validate_value(
     key: str,
     canonical: str,
     value: str,
     override: HeaderOverride,
+    absent_sev: Severity = Severity.INFO,
 ) -> list[Finding]:
     # Config-level value assertions take precedence over built-in checks
     if override.expected_value:
@@ -294,9 +302,11 @@ def _validate_value(
     # Real problems found by the checker are more specific and win; otherwise the
     # config severity applies. Checkers report a clean value with an OK finding, so
     # the test is "found no issue", not "returned nothing".
+    extra = {**override.extra, ABSENT_SEVERITY: absent_sev}
+
     if override.severity_if_present:
         checker = _CHECKERS.get(key)
-        findings = checker(value, override.extra) if checker else []
+        findings = checker(value, extra) if checker else []
         if not any(is_issue(f.severity) for f in findings):
             findings = [Finding(
                 header=canonical,
@@ -312,7 +322,7 @@ def _validate_value(
 
     checker = _CHECKERS.get(key)
     if checker:
-        return checker(value, override.extra)
+        return checker(value, extra)
 
     # Defensive: reached only if a SECURITY_HEADERS entry has no checker yet.
     return []  # pragma: no cover
@@ -649,12 +659,12 @@ def _check_referrer_policy(value: str, extra: dict) -> list[Finding]:
             recommendation="Use no-referrer, or strict-origin-when-cross-origin to send no more "
                            "than the origin.",
         )]
-    # Same outcome as sending no header at all, so it is graded as a problem
-    # rather than a remark — and the site is worse off than if it had not tried,
-    # because it believes a policy is in force.
+    # Same outcome as sending no header at all, so it carries the same severity —
+    # and the site is worse off than if it had not tried, because it believes a
+    # policy is in force.
     return [Finding(
         header='Referrer-Policy',
-        severity=Severity.LOW,
+        severity=extra.get(ABSENT_SEVERITY, Severity.MEDIUM),
         title=f"Referrer-Policy: unrecognized value '{value}' — no policy is in force",
         description="A token that is not one of the eight defined policies is skipped, so the "
                     "browser falls back to its own default exactly as if the header had not been "
