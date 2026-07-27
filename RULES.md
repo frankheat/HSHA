@@ -236,35 +236,54 @@ Strict-Transport-Security:
 
 **Required:** yes — **Severity if missing:** MEDIUM
 
-Values are graded on **what reaches a third party** — the only recipient the site
-does not already control. What a policy sends on a *same-origin* request is not a
-criterion: that recipient served the URL in the first place. The ranking follows
-from what each value discloses, and is this tool's own.
+The `Referer` header tells every destination a page reaches — a CDN serving a
+font, an analytics endpoint, a site the user clicks through to — which URL the
+request came from. URLs carry password-reset tokens, search queries, internal
+paths and record identifiers, so what the policy discloses is what those parties
+get to write in their logs.
 
-| Value | Severity | Rationale |
+**What the grading follows.** Only what leaves the site counts: how a policy
+behaves on a *same-origin* request is not a criterion, because that recipient
+served the URL in the first place. Among what does leave, the deciding question
+is whether a **path or query string** escapes, since that is where tokens and
+internal structure live. The identity of the site on its own is a much smaller
+disclosure — and one every value graded OK below already makes.
+
+| Value | Severity | What leaves the site |
 |---|---|---|
-| `no-referrer`, `same-origin` | OK | Nothing at all is sent cross-origin |
-| `strict-origin`, `strict-origin-when-cross-origin` | OK | Only the origin is sent cross-origin, and nothing on a downgrade to plain HTTP |
-| `origin`, `origin-when-cross-origin` | INFO | Only the origin, never the path or query — the same information the OK values above hand to every third party over HTTPS, but sent to plain-HTTP destinations too. Reported, not counted as a failure |
-| `no-referrer-when-downgrade` | **HIGH** | Sends the **full URL** to every third party over HTTPS. It withholds it only on a downgrade to plain HTTP — the one case browsers increasingly prevent anyway |
-| `unsafe-url` | **HIGH** | Sends the full URL to everyone, plain-HTTP destinations included, where anyone on the network can read it |
-| Any other value, `always` included | Same as absent | The grammar defines eight tokens and browsers skip anything else, falling back to their own default exactly as if the header had not been sent — so no policy is in force, and nothing in the response says so. Graded like the header being missing, because the outcome is the same. `always` belonged to the old `<meta name="referrer">` syntax, never to this header |
+| `no-referrer`, `same-origin` | OK | Nothing |
+| `strict-origin`, `strict-origin-when-cross-origin` | OK | The origin, and only to TLS-protected destinations |
+| `origin`, `origin-when-cross-origin` | INFO | The origin, to plain-HTTP destinations as well |
+| `no-referrer-when-downgrade` | **HIGH** | The full URL, to every destination reached over HTTPS |
+| `unsafe-url` | **HIGH** | The full URL, to plain-HTTP destinations as well |
+| Anything else, `always` included | Same as absent | Nothing — no policy is applied at all |
 
-**Why `no-referrer-when-downgrade` is graded like `unsafe-url`.** Both hand the
-complete URL — path and query string included — to every third party reached over
-HTTPS, and that is where practically all third-party traffic goes. A
-password-reset token, a search query or an internal path ends up in someone
-else's logs either way. The two part company only on a downgrade to plain HTTP:
-`unsafe-url` sends the URL there as well, `no-referrer-when-downgrade` withholds
-it. A real difference, but a narrow one, and one that belongs in the description
-rather than in the severity.
+Values are paired where they differ only in same-origin behaviour, which the
+grading ignores: `no-referrer` and `same-origin` disclose nothing outside the
+site whatever they do inside it, and the same holds for the other two pairs.
 
-**Why the header being absent is MEDIUM.** Absence is not the same as no
-protection, and not the same as a bad policy either: it depends on the browser.
-Current browsers apply `strict-origin-when-cross-origin`, which is graded OK
-above. Older ones apply `no-referrer-when-downgrade`, now graded HIGH. The
-finding sits between the two because the outcome does, and because a site that
-never states a policy has not chosen either of them.
+**Why the plain-HTTP destinations decide one pair and not the other.** The
+severity is set by the worst thing that leaves. For the full-URL pair the HTTPS
+destinations already put both at the top — the token reaches a third party's logs
+either way — so where else the URL goes cannot raise them any further, and
+`unsafe-url` is the worse of the two in its description rather than in its level.
+For the origin pair the HTTPS destinations are harmless, since the values graded
+OK disclose exactly the same thing to exactly the same recipients; the plain-HTTP
+destinations are the only difference left, so they are what moves the pair from
+"nothing to report" to "worth knowing".
+
+**Absent, or set to something the grammar does not define.** The header defines
+eight tokens and nothing else; a browser skips an unknown one and applies its own
+default, which is exactly what it does when no header arrives. The two cases are
+graded alike, so an unrecognised value carries whatever severity a missing header
+carries in the active profile. That severity is MEDIUM by default because the
+outcome is genuinely uncertain: current browsers apply
+`strict-origin-when-cross-origin`, graded OK above, older ones apply
+`no-referrer-when-downgrade`, graded HIGH — and a site that states no policy has
+chosen neither of them. An unrecognised value is the worse of the two in one
+respect: it looks like a policy, so nothing in the response reveals that none is
+in force. `always` belongs here — it was a value of the old
+`<meta name="referrer">` syntax, never of this header.
 
 ---
 
