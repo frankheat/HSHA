@@ -259,7 +259,7 @@ def test_xss_filter_enabled_without_mode_block_is_still_a_finding():
 
 def test_mode_block_finding_explains_the_cross_origin_oracle():
     finding = findings_for("X-XSS-Protection", "1; mode=block")[0]
-    assert "frame count" in finding.description
+    assert "observable from another origin" in finding.description
 
 
 def test_disabled_filter_stays_ok_with_trailing_directives():

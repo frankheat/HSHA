@@ -536,11 +536,11 @@ script was injected or belonged to the page. Two consequences:
   script the page legitimately contains — an anti-CSRF or framebusting script,
   for example. The filter becomes a remote control for switching off a site's own
   defences.
-- With `1; mode=block` the whole page is blanked when the filter triggers, and a
-  blank page is detectable from another origin: its frame count drops to zero.
-  That turns "does this page contain script X?" into a yes/no answer readable
-  cross-origin, and repeating it with different scripts reveals whether the user
-  is signed in, is an administrator, and so on.
+- With `1; mode=block` the page is not rendered at all when the filter triggers,
+  and whether it was blocked is observable from another origin. That turns "does
+  this page contain script X?" into a yes/no answer readable cross-origin, and
+  repeating it with different scripts reveals whether the user is signed in, is
+  an administrator, and so on.
 
 Both stay LOW because no current browser honours the header: Chrome removed the
 auditor in 2019, Safari and Edge dropped theirs, and Firefox never had one.

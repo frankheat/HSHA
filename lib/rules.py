@@ -754,12 +754,12 @@ def _check_x_xss_protection(value: str, extra: dict) -> list[Finding]:
             header='X-XSS-Protection',
             severity=Severity.LOW,
             title="X-XSS-Protection: 1; mode=block (deprecated, potentially risky)",
-            description="mode=block blanks the whole page when the filter triggers, and the "
-                        "filter triggers on scripts the page legitimately contains whenever "
-                        "their markup also appears in the URL. Another site can detect a blank "
-                        "page cross-origin — its frame count drops to zero — turning 'does this "
-                        "page contain script X?' into a yes/no readable from outside. No current "
-                        "browser honours the header, which is what keeps this low.",
+            description="mode=block stops the page from rendering when the filter triggers, and "
+                        "the filter triggers on scripts the page legitimately contains whenever "
+                        "their markup also appears in the URL. Whether a page was blocked is "
+                        "observable from another origin, turning 'does this page contain script "
+                        "X?' into a yes/no readable from outside. No current browser honours the "
+                        "header, which is what keeps this low.",
             recommendation="Set to 0 or remove; use Content-Security-Policy instead.",
         )]
     return [Finding(
