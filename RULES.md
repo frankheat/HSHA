@@ -177,8 +177,13 @@ effective policy is their intersection. Findings combine as follows:
 | `max-age` directive missing, or its value is not a number | HIGH | `max-age` is required for HSTS to function. The value may be quoted (`max-age="31536000"`), which RFC 6797 §6.1 allows |
 | `max-age=0` | HIGH | Explicitly revokes HSTS — browsers delete the entry |
 | `max-age` < threshold *(default: 31536000s / 1 year)* | MEDIUM | Short values reduce protection window against SSL-stripping |
-| `includeSubDomains` missing *(configurable)* | LOW | Subdomains remain vulnerable to SSL-stripping attacks. The directive name is matched as a name, so a misspelling such as `includeSubDomainss` counts as missing — browsers ignore an unrecognised directive, leaving subdomains unprotected |
+| `includeSubDomains` missing *(configurable)* | LOW | Subdomains remain vulnerable to SSL-stripping attacks |
 | `preload` missing *(extended profile only)* | LOW | Site cannot be submitted to browser HSTS preload lists |
+
+Directive names are matched as names, not searched for in the value. A
+misspelling such as `includeSubDomainss`, or the word appearing inside another
+directive's value, counts as the directive being missing — which is what a
+browser does too, since it ignores a directive name it does not recognise.
 
 Threshold values are configurable in the profile:
 ```yaml
