@@ -1,6 +1,6 @@
 # HSHA — HTTP Security Header Analyzer
 
-A CLI tool that parses raw HTTP responses and evaluates security headers against OWASP guidelines. Produces color-coded findings with severity levels.
+A CLI tool that parses raw HTTP responses and evaluates security headers. Produces color-coded findings with severity levels, each explained in [`RULES.md`](RULES.md).
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -108,7 +108,7 @@ A finding counts as an issue from LOW upwards. OK, NOTE and INFO never mark a he
 The tool loads `profiles/basic.yaml` by default. Switch to the extended profile with `--config`:
 
 ```bash
-# Basic profile — 11 core OWASP headers (default)
+# Basic profile — 11 core headers (default)
 python check_headers.py response.txt
 
 # Extended profile — 24 headers including legacy, deprecated, CORS, caching
@@ -222,7 +222,7 @@ there is nothing outstanding, as is the case now.
 check_headers.py       # CLI entry point
 lib/
   parser.py            # HTTP response parser
-  rules.py             # OWASP header rules
+  rules.py             # Per-header rules
   correlations.py      # Checks that need more than one header
   csp_evaluator.py     # CSP evaluation engine
   config.py            # YAML config loader

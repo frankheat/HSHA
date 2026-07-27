@@ -1,6 +1,6 @@
 # HSHA — HTTP Security Header Analyzer — Basic configuration
 #
-# Checks the 11 core OWASP security headers.
+# Checks the 11 core security headers.
 # Use this profile for a standard security review.
 #
 # Usage:

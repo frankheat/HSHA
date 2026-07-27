@@ -1,5 +1,5 @@
 """
-OWASP-based header rule engine.
+Header rule engine.
 Each checker returns a list[Finding] given (header_value, extra_config_dict).
 """
 import re
@@ -599,26 +599,53 @@ def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:
 
 def _check_referrer_policy(value: str, extra: dict) -> list[Finding]:
     n = value.strip().lower()
-    strong = {'no-referrer', 'strict-origin', 'strict-origin-when-cross-origin'}
-    acceptable = {'no-referrer-when-downgrade', 'origin', 'origin-when-cross-origin', 'same-origin'}
-    weak = {'unsafe-url', 'always'}
+    # Graded on what reaches a third party, since that is the only recipient the
+    # site does not already control: nothing, the origin alone, or the full URL.
+    # What a policy sends on a same-origin request is not a criterion — that
+    # recipient served the URL in the first place, and 'strong' already spans
+    # every same-origin behaviour there is.
+    sends_nothing = {'no-referrer', 'same-origin'}
+    sends_origin = {'strict-origin', 'strict-origin-when-cross-origin'}
+    origin_in_clear = {'origin', 'origin-when-cross-origin'}
+    full_url = {'no-referrer-when-downgrade', 'unsafe-url', 'always'}
 
-    if n in strong:
-        return [Finding('Referrer-Policy', Severity.OK, f"Referrer-Policy: '{n}' (strong)")]
-    if n in acceptable:
+    if n in sends_nothing:
+        return [Finding('Referrer-Policy', Severity.OK,
+                        f"Referrer-Policy: '{n}' (sends nothing cross-origin)")]
+    if n in sends_origin:
+        return [Finding('Referrer-Policy', Severity.OK,
+                        f"Referrer-Policy: '{n}' (sends only the origin cross-origin)")]
+    if n in origin_in_clear:
+        # Only the site's identity leaks, never a path or query — and that is the
+        # same thing the OK group already hands to every third party over HTTPS.
+        # Worth reporting, not worth failing a build.
         return [Finding(
             header='Referrer-Policy',
-            severity=Severity.LOW,
-            title=f"Referrer-Policy: '{n}' (leaks some referrer information)",
-            recommendation="Consider no-referrer or strict-origin-when-cross-origin.",
+            severity=Severity.INFO,
+            title=f"Referrer-Policy: '{n}' (sends the origin to plain-HTTP destinations too)",
+            description="Only the origin is sent, never the path or query, but it reaches "
+                        "destinations that are not TLS-protected as well.",
+            recommendation="Use strict-origin or strict-origin-when-cross-origin to withhold it "
+                           "on a downgrade.",
         )]
-    if n in weak:
+    if n in full_url:
+        # These differ only in what happens on a downgrade to plain HTTP. Over
+        # HTTPS — where practically all third-party traffic goes — both hand over
+        # the whole URL, so both are graded on that.
+        also_in_clear = n != 'no-referrer-when-downgrade'
         return [Finding(
             header='Referrer-Policy',
             severity=Severity.HIGH,
-            title=f"Referrer-Policy: '{n}' (unsafe)",
-            description="Sends the full URL as referrer even over plain HTTP, leaking sensitive paths.",
-            recommendation="Use no-referrer or strict-origin-when-cross-origin.",
+            title=f"Referrer-Policy: '{n}' (sends the full URL to third parties)",
+            description="Every third party the page loads a resource from, or links to, receives "
+                        "the complete URL including path and query string — so a password-reset "
+                        "token, a search query or an internal path ends up in someone else's logs."
+                        + (" It is sent to plain-HTTP destinations too, where anyone on the "
+                           "network can read it." if also_in_clear else
+                           " It is withheld only on a downgrade to plain HTTP, which is the one "
+                           "case browsers increasingly prevent anyway."),
+            recommendation="Use no-referrer, or strict-origin-when-cross-origin to send no more "
+                           "than the origin.",
         )]
     return [Finding('Referrer-Policy', Severity.INFO, f"Referrer-Policy: unrecognized value '{value}'")]
 

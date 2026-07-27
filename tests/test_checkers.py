@@ -57,9 +57,10 @@ CASES = [
     ("Referrer-Policy", "no-referrer", Severity.OK),
     ("Referrer-Policy", "strict-origin", Severity.OK),
     ("Referrer-Policy", "strict-origin-when-cross-origin", Severity.OK),
-    ("Referrer-Policy", "origin", Severity.LOW),
-    ("Referrer-Policy", "same-origin", Severity.LOW),
-    ("Referrer-Policy", "no-referrer-when-downgrade", Severity.LOW),
+    ("Referrer-Policy", "origin", Severity.INFO),
+    ("Referrer-Policy", "origin-when-cross-origin", Severity.INFO),
+    ("Referrer-Policy", "same-origin", Severity.OK),
+    ("Referrer-Policy", "no-referrer-when-downgrade", Severity.HIGH),
     ("Referrer-Policy", "unsafe-url", Severity.HIGH),
     ("Referrer-Policy", "always", Severity.HIGH),
     ("Referrer-Policy", "bogus", Severity.INFO),
@@ -339,3 +340,9 @@ def test_permissions_policy_wildcard_is_read_from_the_allowlist():
 def test_content_disposition_type_is_the_first_token():
     assert severity_for("Content-Disposition", 'attachment; filename="inline.pdf"') == Severity.OK
     assert severity_for("Content-Disposition", "attachmentx") == Severity.INFO
+
+
+def test_referrer_policy_same_origin_is_strong():
+    """It sends nothing at all cross-origin — less than
+    strict-origin-when-cross-origin, which sends the origin."""
+    assert severity_for("Referrer-Policy", "same-origin") == Severity.OK

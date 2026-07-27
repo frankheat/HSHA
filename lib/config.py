@@ -9,9 +9,9 @@ from typing import Any, Optional
 class HeaderOverride:
     # Skip this header entirely (not checked, not shown in output)
     skip: bool = False
-    # Override whether the header is required (None = use OWASP default)
+    # Override whether the header is required (None = use the built-in default)
     required: Optional[bool] = None
-    # Severity to emit when the header is missing (None = use OWASP default)
+    # Severity to emit when the header is missing (None = use the built-in default)
     severity_if_missing: Optional[str] = None
     # Severity to emit when the header is present (useful for deprecated headers)
     severity_if_present: Optional[str] = None

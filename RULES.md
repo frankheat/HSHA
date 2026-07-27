@@ -236,12 +236,35 @@ Strict-Transport-Security:
 
 **Required:** yes — **Severity if missing:** MEDIUM
 
+Values are graded on **what reaches a third party** — the only recipient the site
+does not already control. What a policy sends on a *same-origin* request is not a
+criterion: that recipient served the URL in the first place. The ranking follows
+from what each value discloses, and is this tool's own.
+
 | Value | Severity | Rationale |
 |---|---|---|
-| `no-referrer`, `strict-origin`, `strict-origin-when-cross-origin` | OK | Strong policies — no or minimal referrer leakage |
-| `no-referrer-when-downgrade`, `origin`, `origin-when-cross-origin`, `same-origin` | LOW | Acceptable but leaks some referrer information |
-| `unsafe-url`, `always` | HIGH | Sends full URL as referrer even over HTTP — leaks sensitive paths |
-| Any other value | INFO | Unrecognized value |
+| `no-referrer`, `same-origin` | OK | Nothing at all is sent cross-origin |
+| `strict-origin`, `strict-origin-when-cross-origin` | OK | Only the origin is sent cross-origin, and nothing on a downgrade to plain HTTP |
+| `origin`, `origin-when-cross-origin` | INFO | Only the origin, never the path or query — the same information the OK values above hand to every third party over HTTPS, but sent to plain-HTTP destinations too. Reported, not counted as a failure |
+| `no-referrer-when-downgrade` | **HIGH** | Sends the **full URL** to every third party over HTTPS. It withholds it only on a downgrade to plain HTTP — the one case browsers increasingly prevent anyway |
+| `unsafe-url`, `always` | **HIGH** | Sends the full URL to everyone, plain-HTTP destinations included, where anyone on the network can read it |
+| Any other value | INFO | Unrecognized value; browsers fall back to their default policy |
+
+**Why `no-referrer-when-downgrade` is graded like `unsafe-url`.** Both hand the
+complete URL — path and query string included — to every third party reached over
+HTTPS, and that is where practically all third-party traffic goes. A
+password-reset token, a search query or an internal path ends up in someone
+else's logs either way. The two part company only on a downgrade to plain HTTP:
+`unsafe-url` sends the URL there as well, `no-referrer-when-downgrade` withholds
+it. A real difference, but a narrow one, and one that belongs in the description
+rather than in the severity.
+
+**Why the header being absent is MEDIUM.** Absence is not the same as no
+protection, and not the same as a bad policy either: it depends on the browser.
+Current browsers apply `strict-origin-when-cross-origin`, which is graded OK
+above. Older ones apply `no-referrer-when-downgrade`, now graded HIGH. The
+finding sits between the two because the outcome does, and because a site that
+never states a policy has not chosen either of them.
 
 ---
 

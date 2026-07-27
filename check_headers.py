@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 HSHA — HTTP Security Header Analyzer
-OWASP-based checker.
+Parses a raw HTTP response and evaluates its security headers.
 
 Usage:
     python check_headers.py response.txt
@@ -23,7 +23,7 @@ from lib.rules import analyze_headers
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="HSHA — HTTP Security Header Analyzer — OWASP-based",
+        description="HSHA — HTTP Security Header Analyzer",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

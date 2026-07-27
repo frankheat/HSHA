@@ -45,7 +45,7 @@ _CONTEXT_NOTE = (
 def _print_banner():
     console.print()
     console.print(Panel.fit(
-        "[bold white]HSHA[/bold white] [dim]— HTTP Security Header Analyzer — OWASP-based[/dim]",
+        "[bold white]HSHA[/bold white] [dim]— HTTP Security Header Analyzer[/dim]",
         border_style="bright_blue",
     ))
     console.print(_CONTEXT_NOTE)
