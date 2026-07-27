@@ -651,8 +651,13 @@ def _check_x_permitted_cross_domain_policies(value: str, extra: dict) -> list[Fi
 
 
 def _check_x_xss_protection(value: str, extra: dict) -> list[Finding]:
-    n = value.strip()
-    if n == '0':
+    # The header is a flag ('0' or '1') optionally followed by directives, so the
+    # flag has to be read on its own: searching the whole value for '1' matches
+    # the digit inside a directive such as report=1.
+    parts = [p.strip().lower() for p in value.split(';')]
+    flag, directives = parts[0], parts[1:]
+
+    if flag == '0':
         return [Finding(
             header='X-XSS-Protection',
             severity=Severity.OK,
@@ -660,12 +665,29 @@ def _check_x_xss_protection(value: str, extra: dict) -> list[Finding]:
             description="The header is deprecated. Setting it to 0 is correct for modern browsers.",
             recommendation="Consider removing this header entirely; rely on CSP instead.",
         )]
-    if '1' in n and 'mode=block' in n.lower():
+    if flag == '1' and 'mode=block' not in directives:
+        return [Finding(
+            header='X-XSS-Protection',
+            severity=Severity.LOW,
+            title="X-XSS-Protection: 1 enables the deprecated XSS filter",
+            description="The filter matched text from the URL against the scripts in the page, "
+                        "so an attacker could craft a URL that made it neutralise a script the "
+                        "page legitimately contains — an anti-CSRF or framebusting script, for "
+                        "example. No current browser honours the header, which is what keeps "
+                        "this low.",
+            recommendation="Set to 0 or remove the header; rely on Content-Security-Policy.",
+        )]
+    if flag == '1':
         return [Finding(
             header='X-XSS-Protection',
             severity=Severity.LOW,
             title="X-XSS-Protection: 1; mode=block (deprecated, potentially risky)",
-            description="Deprecated and mode=block can cause info leaks in old browsers.",
+            description="mode=block blanks the whole page when the filter triggers, and the "
+                        "filter triggers on scripts the page legitimately contains whenever "
+                        "their markup also appears in the URL. Another site can detect a blank "
+                        "page cross-origin — its frame count drops to zero — turning 'does this "
+                        "page contain script X?' into a yes/no readable from outside. No current "
+                        "browser honours the header, which is what keeps this low.",
             recommendation="Set to 0 or remove; use Content-Security-Policy instead.",
         )]
     return [Finding(

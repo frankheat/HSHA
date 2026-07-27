@@ -128,7 +128,11 @@ CASES = [
     # --- Deprecated ---
     ("X-XSS-Protection", "0", Severity.OK),
     ("X-XSS-Protection", "1; mode=block", Severity.LOW),
-    ("X-XSS-Protection", "1", Severity.INFO),
+    ("X-XSS-Protection", "1", Severity.LOW),
+    ("X-XSS-Protection", "1; report=/x", Severity.LOW),
+    ("X-XSS-Protection", "0; mode=block", Severity.OK),
+    ("X-XSS-Protection", "report=1; mode=block", Severity.INFO),
+    ("X-XSS-Protection", "banana", Severity.INFO),
     ("Expect-CT", "max-age=86400, enforce", Severity.INFO),
 ]
 
@@ -239,3 +243,31 @@ def test_acao_wildcard_names_the_case_that_actually_matters():
     assert finding.severity == Severity.MEDIUM
     assert "not by an attacker's server" in finding.description
     assert "reachable" in finding.recommendation
+
+
+# ---------------------------------------------------------------------------
+# X-XSS-Protection: the flag is the first token, not any '1' in the value
+# ---------------------------------------------------------------------------
+
+def test_xss_filter_enabled_without_mode_block_is_still_a_finding():
+    """Enabling the filter lets a crafted URL neutralise a script the page
+    legitimately contains, so it does not belong with unrecognised values."""
+    findings = findings_for("X-XSS-Protection", "1")
+    assert findings[0].severity == Severity.LOW
+    assert has(findings, "enables the deprecated XSS filter")
+
+
+def test_mode_block_finding_explains_the_cross_origin_oracle():
+    finding = findings_for("X-XSS-Protection", "1; mode=block")[0]
+    assert "frame count" in finding.description
+
+
+def test_disabled_filter_stays_ok_with_trailing_directives():
+    """mode=block is irrelevant once the filter is off."""
+    assert severity_for("X-XSS-Protection", "0; mode=block") == Severity.OK
+    assert severity_for("X-XSS-Protection", "0;") == Severity.OK
+
+
+def test_a_digit_inside_a_directive_is_not_the_flag():
+    """Regression: 'report=1; mode=block' used to match the substring '1'."""
+    assert severity_for("X-XSS-Protection", "report=1; mode=block") == Severity.INFO

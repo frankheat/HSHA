@@ -512,9 +512,33 @@ suppressed, including the cases that matter.
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `0` | OK | Deprecated header correctly disabled — consider removing entirely |
-| `1; mode=block` | LOW | Deprecated and `mode=block` can cause info leaks in old browsers |
-| Any other value | INFO | Deprecated header |
+The value is a flag (`0` or `1`) optionally followed by directives, and only the
+flag decides the verdict — a digit inside a directive such as `report=1` is not
+one.
+
+| Value | Severity | Rationale |
+|---|---|---|
+| `0` (with or without trailing directives) | OK | The filter is off, which is the recommended setting; `mode=block` is irrelevant once it is |
+| `1` | LOW | Enables the filter — see below |
+| `1; mode=block` | LOW | Enables the filter in its leakiest mode — see below |
+| Any other value | INFO | Deprecated header, not doing anything risky |
+
+**Why enabling it is worse than disabling it.** The filter compared text from the
+URL against the scripts in the response and could not tell whether a matching
+script was injected or belonged to the page. Two consequences:
+
+- With `1`, an attacker could craft a URL that made the browser neutralise a
+  script the page legitimately contains — an anti-CSRF or framebusting script,
+  for example. The filter becomes a remote control for switching off a site's own
+  defences.
+- With `1; mode=block` the whole page is blanked when the filter triggers, and a
+  blank page is detectable from another origin: its frame count drops to zero.
+  That turns "does this page contain script X?" into a yes/no answer readable
+  cross-origin, and repeating it with different scripts reveals whether the user
+  is signed in, is an administrator, and so on.
+
+Both stay LOW because no current browser honours the header: Chrome removed the
+auditor in 2019, Safari and Edge dropped theirs, and Firefox never had one.
 
 ---
 
