@@ -256,7 +256,7 @@ disclosure — and one every value graded OK below already makes.
 | `origin`, `origin-when-cross-origin` | INFO | The origin, to plain-HTTP destinations as well |
 | `no-referrer-when-downgrade` | **HIGH** | The full URL, to every destination reached over HTTPS |
 | `unsafe-url` | **HIGH** | The full URL, to plain-HTTP destinations as well |
-| Anything else, `always` included | Same as absent | Nothing — no policy is applied at all |
+| Anything else | Same as absent | Nothing — no policy is applied at all |
 
 Values are paired where they differ only in same-origin behaviour, which the
 grading ignores: `no-referrer` and `same-origin` disclose nothing outside the
@@ -282,8 +282,7 @@ outcome is genuinely uncertain: current browsers apply
 `no-referrer-when-downgrade`, graded HIGH — and a site that states no policy has
 chosen neither of them. An unrecognised value is the worse of the two in one
 respect: it looks like a policy, so nothing in the response reveals that none is
-in force. `always` belongs here — it was a value of the old
-`<meta name="referrer">` syntax, never of this header.
+in force.
 
 ---
 
