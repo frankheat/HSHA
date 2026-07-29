@@ -182,7 +182,7 @@ effective policy is their intersection. Findings combine as follows:
 
 | Condition | Severity | Rationale |
 |---|---|---|
-| `max-age` directive missing, or its value is not a number | HIGH | `max-age` is required for HSTS to function. The value may be quoted (`max-age="31536000"`), which RFC 6797 §6.1 allows |
+| Header does not conform to RFC 6797 §6.1 | Same as absent | A browser ignores such a header in full, so the site has no HSTS at all. Covers a missing or non-numeric `max-age`, a directive repeated (`max-age=1; max-age=2`), and `includeSubDomains` or `preload` given a value. The value may be quoted (`max-age="31536000"`), which the RFC allows |
 | `max-age=0` | HIGH | Explicitly revokes HSTS — browsers delete the entry |
 | `max-age` < threshold *(default: 31536000s / 1 year)* | MEDIUM | Short values reduce protection window against SSL-stripping |
 | `includeSubDomains` missing *(configurable)* | LOW | Subdomains remain vulnerable to SSL-stripping attacks |
@@ -191,7 +191,13 @@ effective policy is their intersection. Findings combine as follows:
 Directive names are matched as names, not searched for in the value. A
 misspelling such as `includeSubDomainss`, or the word appearing inside another
 directive's value, counts as the directive being missing — which is what a
-browser does too, since it ignores a directive name it does not recognise.
+browser does too, since it ignores a directive name it does not recognise. Note
+the asymmetry the RFC draws: an *unrecognised* directive is skipped and the rest
+of the header still applies, but a *recognised* one used wrongly — repeated, or
+given a value it must not have — invalidates the whole header.
+
+`preload` is not defined by RFC 6797. It is a convention for submission to the
+browser preload lists, checked only when a profile asks for it.
 
 Threshold values are configurable in the profile:
 ```yaml

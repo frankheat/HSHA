@@ -398,21 +398,54 @@ def _parse_directives(value: str, separator: str) -> dict[str, Optional[str]]:
     return directives
 
 
+def _hsts_syntax_error(value: str, directives: dict) -> Optional[str]:
+    """
+    Why a browser would throw the whole header away, or None if it would not.
+
+    RFC 6797 §6.1 requires every directive to appear at most once, gives
+    includeSubDomains and preload no value, and defines max-age as 1*DIGIT. A
+    header that does not conform is ignored in full — the site then has no HSTS
+    at all, which is why this is graded like the header being absent.
+    """
+    canonical = {'max-age': 'max-age', 'includesubdomains': 'includeSubDomains',
+                 'preload': 'preload'}
+    spell = lambda n: canonical.get(n, n)
+
+    names = [t.partition('=')[0].strip().lower() for t in _split_outside_quotes(value, ';')]
+    names = [n for n in names if n]
+    repeated = sorted({n for n in names if names.count(n) > 1})
+    if repeated:
+        return f"the {', '.join(spell(n) for n in repeated)} directive appears more than once"
+
+    valued = sorted(n for n in ('includesubdomains', 'preload') if directives.get(n))
+    if valued:
+        return f"{' and '.join(spell(n) for n in valued)} must not be given a value"
+
+    raw_max_age = directives.get('max-age')
+    if raw_max_age is None:
+        return "the required max-age directive is missing"
+    if not raw_max_age.isdigit():
+        return f"max-age must be a number of seconds, not '{raw_max_age}'"
+    return None
+
+
 def _check_hsts(value: str, extra: dict) -> list[Finding]:
     findings: list[Finding] = []
     directives = _parse_directives(value, ';')
-    raw_max_age = directives.get('max-age')
 
-    if raw_max_age is None or not raw_max_age.isdigit():
+    reason = _hsts_syntax_error(value, directives)
+    if reason:
         return [Finding(
             header='Strict-Transport-Security',
-            severity=Severity.HIGH,
-            title="HSTS: missing max-age",
-            description="The max-age directive is required, with a value in seconds.",
+            severity=extra.get(ABSENT_SEVERITY, Severity.HIGH),
+            title=f"HSTS: the header is not valid — {reason}",
+            description="A browser ignores a Strict-Transport-Security header that does not "
+                        "conform to RFC 6797 §6.1, so this site has no HSTS at all — the same "
+                        "position as never sending the header. Nothing in the response says so.",
             recommendation="Strict-Transport-Security: max-age=31536000; includeSubDomains",
         )]
 
-    max_age = int(raw_max_age)
+    max_age = int(directives['max-age'])
     try:
         min_age = int(extra.get('min_max_age', 31536000))
     except (TypeError, ValueError):

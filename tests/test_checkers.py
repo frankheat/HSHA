@@ -319,7 +319,8 @@ def test_hsts_accepts_a_quoted_max_age():
 
 
 def test_hsts_rejects_a_non_numeric_max_age():
-    assert has(findings_for("Strict-Transport-Security", "max-age=forever"), "missing max-age")
+    assert has(findings_for("Strict-Transport-Security", "max-age=forever"),
+               "max-age must be a number of seconds")
 
 
 def test_permissions_policy_wildcard_is_read_from_the_allowlist():
@@ -433,3 +434,42 @@ def test_cache_control_with_no_understood_directive_matches_an_absent_header():
 
 def test_one_understood_directive_is_enough_to_be_judged_on_its_merits():
     assert severity_for("Cache-Control", "max-age=600, zzz-bogus") == Severity.HIGH
+
+
+# ---------------------------------------------------------------------------
+# HSTS: a header a browser would throw away is graded like no header at all
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("value,reason", [
+    ("max-age=1; max-age=31536000", "appears more than once"),
+    ("max-age=31536000; includeSubDomains; includeSubDomains", "appears more than once"),
+    ("max-age=31536000; includeSubDomains=true", "must not be given a value"),
+    ("max-age=31536000; preload=1", "must not be given a value"),
+    ("max-age=forever", "must be a number of seconds"),
+    ("max-age=-1", "must be a number of seconds"),
+    ("includeSubDomains", "required max-age directive is missing"),
+])
+def test_hsts_header_that_does_not_conform_is_graded_as_absent(value, reason):
+    """RFC 6797 §6.1: a non-conforming header is ignored in full, so the site has
+    no HSTS — reporting it as configured would be the worst kind of wrong."""
+    absent = analyze("X-Nothing: x")['strict-transport-security'].worst_severity
+    findings = findings_for("Strict-Transport-Security", value)
+    assert findings[0].severity == absent
+    assert has(findings, "the header is not valid")
+    assert has(findings, reason)
+
+
+def test_hsts_names_the_offending_directive_as_it_is_spelled():
+    assert has(findings_for("Strict-Transport-Security", "max-age=1; includeSubDomains=true"),
+               "includeSubDomains must not be given a value")
+
+
+def test_hsts_ignores_unrecognised_directives():
+    """RFC 6797: unknown directives are skipped and the rest is processed."""
+    value = "max-age=31536000; includeSubDomains; some-future-directive"
+    assert severity_for("Strict-Transport-Security", value) == Severity.OK
+
+
+def test_hsts_accepts_the_quoted_form_the_rfc_shows():
+    assert severity_for("Strict-Transport-Security",
+                        'max-age="31536000"; includeSubDomains') == Severity.OK
