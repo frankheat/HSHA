@@ -77,39 +77,45 @@ def _resolve_duplicates(
     if len(values) == 1:
         return values[0], None
 
+    strategy = _DUPLICATE_STRATEGIES.get(key, 'first')
     identical = len({v.strip().lower() for v in values}) == 1
+
     if identical:
         effective = values[0]
         behavior = "the duplicate values are identical"
+    elif strategy == 'join':
+        effective = ', '.join(values)
+        behavior = "browsers combine them into a single list"
+    elif strategy == 'last':
+        effective = values[-1]
+        behavior = "browsers honor the last valid value"
+    elif strategy == 'strictest':
+        effective = 'DENY'
+        behavior = "browsers block framing when the values conflict"
     else:
-        strategy = _DUPLICATE_STRATEGIES.get(key, 'first')
-        if strategy == 'join':
-            effective = ', '.join(values)
-            behavior = "browsers combine them into a single list"
-        elif strategy == 'last':
-            effective = values[-1]
-            behavior = "browsers honor the last valid value"
-        elif strategy == 'strictest':
-            effective = 'DENY'
-            behavior = "browsers block framing when the values conflict"
-        else:
-            effective = values[0]
-            behavior = "browsers honor the first value"
+        effective = values[0]
+        behavior = "browsers honor the first value"
 
     seen = f"Values sent: {'; '.join(values)}. Evaluated as '{effective}' because {behavior}."
 
-    # Repeating the same value is harmless noise. Contradictory values are a
-    # misconfiguration: one component's intent is silently discarded, and which
-    # one wins is a resolution rule rather than anything the site chose.
-    if identical:
+    # A value is only lost when the resolution has to pick one occurrence over the
+    # others. Under 'join' nothing is lost: repeating the header is how a combined
+    # list is expressed, so two different values are additive, not contradictory.
+    if identical or strategy == 'join':
         return effective, Finding(
             header=canonical,
             severity=Severity.NOTE,
             title=f"{canonical}: header sent {len(values)} times",
             description=seen,
-            recommendation=f"Configure the server (and any proxy/CDN) to send {canonical} only once.",
+            recommendation=(
+                f"Configure the server (and any proxy/CDN) to send {canonical} only once."
+                if identical else ""
+            ),
         )
 
+    # Here one component's value is discarded, so whoever set it is working on a
+    # false assumption — and which one wins comes from a resolution rule rather
+    # than from anything the site chose.
     return effective, Finding(
         header=canonical,
         severity=Severity.LOW,

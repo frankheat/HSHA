@@ -29,8 +29,8 @@ These checks apply to every header before any value-specific logic runs.
 | Header absent + required | Per-header default | Missing required security header |
 | Header absent + optional | INFO | Absent but not mandatory in current profile |
 | Header present, value is empty | Same as absent | Browsers ignore a header with no value, so the impact is identical to not sending it. Reported under its own title because an empty value usually means a misconfigured template or proxy |
-| Header sent more than once, same value | **NOTE** | Harmless: a proxy/CDN repeating an instruction the origin already sent |
-| Header sent more than once, conflicting values | **LOW** | A misconfiguration — see below |
+| Header sent more than once, values combine | **NOTE** | Nothing is lost: the occurrences merge, or they were identical to begin with |
+| Header sent more than once, one value discarded | **LOW** | A misconfiguration — see below |
 
 An optional header that is absent is reported at INFO, so it never fails a build.
 Where a specific recommendation exists for that header it is shown anyway — that
@@ -54,13 +54,21 @@ effective value the same way browsers do, then evaluates that value:
 The finding always reports the original values, the effective value chosen, and
 why.
 
-**Why conflicting values are a finding of their own.** Repeating the same value
-is noise. Contradictory values mean two components disagree — typically the
-application and a CDN or WAF in front of it — and the resolution silently
-discards one of them, so whoever configured the losing value is operating on a
-false assumption. The winning value is also decided by a resolution rule rather
-than by anything the site chose, and that resolution is not guaranteed to be
-identical in every browser.
+**When repetition is a finding, and when it is not.** What matters is whether the
+resolution has to throw a value away.
+
+Under **join** nothing is thrown away: sending the header more than once is how a
+combined list is expressed, so `Cache-Control: max-age=600` followed by
+`Cache-Control: must-revalidate` means exactly what the two directives on one line
+would mean. Two CSP headers are likewise both enforced. These stay a NOTE, and
+there is nothing to fix.
+
+Under **first**, **last** and **strictest** one occurrence wins and the others are
+discarded. That is a misconfiguration: two components disagree — typically the
+application and a CDN or WAF in front of it — and whoever configured the losing
+value is operating on a false assumption. The winning value is decided by a
+resolution rule rather than by anything the site chose, and that resolution is not
+guaranteed to be identical in every browser.
 
 The severity is deliberately LOW rather than higher: the resolved value is
 usually the safe one, so this is a configuration defect to fix rather than an

@@ -1,8 +1,10 @@
 """Duplicate-header resolution — the strategies in lib/rules.py:_DUPLICATE_STRATEGIES.
 
-Repeating the same value is harmless (NOTE). Contradictory values are a
-misconfiguration (LOW): one component's intent is discarded, and which one wins
-comes from a resolution rule rather than from anything the site chose.
+A value is only lost when the resolution has to pick one occurrence over the
+others, which is what makes it a misconfiguration (LOW): one component's intent
+is discarded, and which one wins comes from a resolution rule rather than from
+anything the site chose. Repeating the same value, or sending a header whose
+occurrences combine, loses nothing and stays a NOTE.
 """
 import pytest
 
@@ -54,12 +56,36 @@ def test_identical_duplicates_do_not_make_a_header_fail():
     ("Strict-Transport-Security", 'strict-transport-security', "max-age=31536000", "max-age=600"),
     ("Referrer-Policy", 'referrer-policy', "unsafe-url", "no-referrer"),
     ("X-Frame-Options", 'x-frame-options', "deny", "sameorigin"),
-    ("Cache-Control", 'cache-control', "no-store", "public"),
 ])
 def test_conflicting_duplicates_are_low(header, key, first, second):
+    """Only where the resolution discards one of the values."""
     result = analyze(f"{header}: {first}", f"{header}: {second}")[key]
     assert duplicate_finding(result).severity == Severity.LOW
     assert result.worst_severity >= Severity.LOW
+
+
+@pytest.mark.parametrize("header,key,first,second", [
+    ("Cache-Control", 'cache-control', "max-age=600", "must-revalidate"),
+    ("Content-Security-Policy", 'content-security-policy', "default-src 'none'", "frame-ancestors 'none'"),
+    ("Clear-Site-Data", 'clear-site-data', '"cache"', '"cookies"'),
+    ("Permissions-Policy", 'permissions-policy', "camera=()", "microphone=()"),
+    ("Pragma", 'pragma', "no-cache", "no-transform"),
+])
+def test_joined_duplicates_are_not_a_conflict(header, key, first, second):
+    """Under 'join' every value survives: sending the header twice is how a
+    combined list is expressed, so two different values are additive."""
+    result = analyze(f"{header}: {first}", f"{header}: {second}")[key]
+    finding = duplicate_finding(result)
+    assert finding.severity == Severity.NOTE
+    assert "conflicting" not in finding.title
+
+
+def test_joined_duplicates_carry_no_recommendation():
+    """Nothing to change — unlike a repeated identical value, which is noise."""
+    joined = analyze("Cache-Control: max-age=600", "Cache-Control: must-revalidate")['cache-control']
+    repeated = analyze("Cache-Control: no-store", "Cache-Control: no-store")['cache-control']
+    assert duplicate_finding(joined).recommendation == ""
+    assert duplicate_finding(repeated).recommendation != ""
 
 
 def test_conflict_finding_names_the_problem():
