@@ -1,7 +1,7 @@
 """Shared helpers for the HSHA test suite."""
 from pathlib import Path
 
-from lib.config import AppConfig, load_config
+from lib.config import CONTEXT_PUBLIC, AppConfig, load_config
 from lib.models import Finding, HeaderResult, Severity
 from lib.parser import parse_http_response
 from lib.rules import analyze_headers
@@ -38,6 +38,11 @@ def has(findings: list[Finding], substring: str) -> bool:
     return any(substring in f.title for f in findings)
 
 
+def public() -> AppConfig:
+    """Config assuming the response carries nothing specific to a signed-in user."""
+    return AppConfig(context=CONTEXT_PUBLIC)
+
+
 def profile(name: str) -> AppConfig:
     return load_config(str(ROOT / 'profiles' / f'{name}.yaml'))
 
@@ -51,4 +56,5 @@ CLEAN_HEADERS = [
     "X-Content-Type-Options: nosniff",
     "Cross-Origin-Opener-Policy: same-origin",
     "Referrer-Policy: no-referrer",
+    "Cache-Control: no-store",
 ]

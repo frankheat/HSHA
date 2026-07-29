@@ -3,7 +3,7 @@ import pytest
 
 from lib.models import Severity
 
-from conftest import analyze, findings_for, has, severity_for
+from conftest import analyze, findings_for, has, public, severity_for
 
 _PP_HIGH = ['camera', 'microphone', 'geolocation', 'payment', 'usb', 'display-capture']
 _PP_MEDIUM = ['accelerometer', 'gyroscope', 'magnetometer', 'midi', 'screen-wake-lock',
@@ -72,14 +72,7 @@ CASES = [
     ("X-Permitted-Cross-Domain-Policies", "by-content-type", Severity.MEDIUM),
     ("X-Permitted-Cross-Domain-Policies", "bogus", Severity.INFO),
 
-    # --- Cache-Control ---
-    ("Cache-Control", "no-store", Severity.OK),
-    ("Cache-Control", "no-cache", Severity.OK),
-    ("Cache-Control", "private", Severity.OK),
-    ("Cache-Control", "max-age=600", Severity.OK),
-    ("Cache-Control", "max-age=600, must-revalidate", Severity.OK),
-    ("Cache-Control", "public, max-age=600", Severity.INFO),
-    ("Cache-Control", "surrogate-control=xyz", Severity.INFO),
+    # Cache-Control depends on --context; see the dedicated test below.
 
     # --- Clear-Site-Data ---
     ("Clear-Site-Data", '"*"', Severity.OK),
@@ -281,31 +274,31 @@ def test_a_digit_inside_a_directive_is_not_the_flag():
 def test_qualified_no_cache_is_not_the_same_as_a_bare_one():
     """no-cache="Set-Cookie" only covers that field: the rest of the response
     may be served from cache without revalidation (RFC 9111)."""
-    findings = findings_for("Cache-Control", 'no-cache="Set-Cookie"')
+    findings = findings_for("Cache-Control", 'no-cache="Set-Cookie"', public())
     assert findings[0].severity == Severity.INFO
     assert has(findings, "limited to 'Set-Cookie'")
 
 
 def test_qualified_private_is_not_the_same_as_a_bare_one():
-    findings = findings_for("Cache-Control", 'private="X-Custom"')
+    findings = findings_for("Cache-Control", 'private="X-Custom"', public())
     assert findings[0].severity == Severity.INFO
     assert has(findings, "limited to 'X-Custom'")
 
 
 @pytest.mark.parametrize("value", ["no-store", "no-cache", "private"])
 def test_bare_cache_directives_are_still_ok(value):
-    assert severity_for("Cache-Control", value) == Severity.OK
+    assert severity_for("Cache-Control", value, public()) == Severity.OK
 
 
 def test_a_token_merely_containing_a_directive_name_is_unrecognised():
     """'x-no-store-hack' used to be reported as no-store."""
-    findings = findings_for("Cache-Control", "x-no-store-hack")
+    findings = findings_for("Cache-Control", "x-no-store-hack", public())
     assert findings[0].severity == Severity.INFO
     assert has(findings, "unrecognized directive")
 
 
 def test_a_quoted_comma_does_not_split_a_directive():
-    assert severity_for("Cache-Control", 'no-cache="X-A,X-B"') == Severity.INFO
+    assert severity_for("Cache-Control", 'no-cache="X-A,X-B"', public()) == Severity.INFO
 
 
 @pytest.mark.parametrize("value", [
@@ -383,3 +376,48 @@ def test_referrer_policy_invalid_value_follows_a_config_override():
     })
     assert analyze("X-Nothing: x", config=config)['referrer-policy'].worst_severity == Severity.HIGH
     assert severity_for("Referrer-Policy", "bogus", config) == Severity.HIGH
+
+
+# ---------------------------------------------------------------------------
+# Cache-Control: the one check whose *correct* value depends on --context
+# ---------------------------------------------------------------------------
+
+CACHE_CASES = [
+    # value,                        public,          authenticated
+    ("no-store",                    Severity.OK,     Severity.OK),
+    ("private",                     Severity.OK,     Severity.LOW),
+    ("private, max-age=600",        Severity.OK,     Severity.LOW),
+    ("no-cache",                    Severity.OK,     Severity.MEDIUM),
+    ("max-age=0, must-revalidate",  Severity.OK,     Severity.MEDIUM),
+    ("max-age=600",                 Severity.OK,     Severity.HIGH),
+    ("s-maxage=600",                Severity.OK,     Severity.HIGH),
+    ("public, max-age=600",         Severity.INFO,   Severity.HIGH),
+    ('no-cache="Set-Cookie"',       Severity.INFO,   Severity.HIGH),
+    ('private="X-Custom"',          Severity.INFO,   Severity.HIGH),
+    ("surrogate-control=xyz",       Severity.INFO,   Severity.HIGH),
+]
+
+
+@pytest.mark.parametrize("value,expected_public,expected_auth", CACHE_CASES,
+                         ids=[v for v, *_ in CACHE_CASES])
+def test_cache_control_depends_on_the_assumed_context(value, expected_public, expected_auth):
+    assert severity_for("Cache-Control", value, public()) == expected_public
+    assert severity_for("Cache-Control", value) == expected_auth      # authenticated by default
+
+
+def test_only_no_store_is_clean_for_an_authenticated_response():
+    """private keeps it off shared caches but not off the disk; no-cache stops
+    neither, it only forces revalidation."""
+    assert severity_for("Cache-Control", "no-store") == Severity.OK
+    assert has(findings_for("Cache-Control", "private"), "not off the disk")
+    assert has(findings_for("Cache-Control", "no-cache"), "does not stop a shared cache")
+
+
+def test_a_cacheable_authenticated_response_names_the_leak():
+    finding = findings_for("Cache-Control", "max-age=600")[0]
+    assert "serve it to the next person" in finding.description
+
+
+def test_missing_cache_control_is_a_finding_only_in_the_authenticated_context():
+    assert analyze("X-Nothing: x")['cache-control'].worst_severity == Severity.MEDIUM
+    assert analyze("X-Nothing: x", config=public())['cache-control'].worst_severity == Severity.INFO

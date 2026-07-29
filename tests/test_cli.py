@@ -217,9 +217,9 @@ def test_list_output_and_exit_code_agree(response_file):
 
 def test_absent_optional_header_is_informational_not_a_failure(response_file):
     data = json.loads(run(response_file(CLEAN), '--format', 'json').stdout)
-    cache = next(r for r in data if r['header'] == 'Cache-Control')
-    assert cache['severity'] == 'INFO'
-    assert 'Cache-Control' not in run(response_file(CLEAN), '--format', 'list').stdout
+    coep = next(r for r in data if r['header'] == 'Cross-Origin-Embedder-Policy')
+    assert coep['severity'] == 'INFO'
+    assert 'Cross-Origin-Embedder-Policy' not in run(response_file(CLEAN), '--format', 'list').stdout
 
 
 def test_info_only_response_reports_pass_and_exits_zero(response_file):
@@ -233,4 +233,4 @@ def test_informational_findings_are_still_shown(response_file):
     """Suppressed from the verdict, not from the report."""
     out = run(response_file(CLEAN), '--mode', 'simple').stdout
     assert 'Informational' in out
-    assert 'Missing Cache-Control' in out
+    assert 'Missing Cross-Origin-Embedder-Policy' in out

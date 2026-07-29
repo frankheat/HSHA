@@ -31,7 +31,6 @@ def test_missing_required_header_uses_its_default_severity(header, expected):
 @pytest.mark.parametrize("header", [
     "Cross-Origin-Embedder-Policy",
     "Cross-Origin-Resource-Policy",
-    "Cache-Control",
     "Clear-Site-Data",
     "ETag",
 ])
@@ -277,7 +276,6 @@ def test_custom_header_is_still_matched_case_insensitively():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("header,key", [
-    ("Cache-Control", 'cache-control'),
     ("Cross-Origin-Embedder-Policy", 'cross-origin-embedder-policy'),
     ("Cross-Origin-Resource-Policy", 'cross-origin-resource-policy'),
 ])

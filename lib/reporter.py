@@ -34,12 +34,22 @@ def report(
 # Shared
 # ---------------------------------------------------------------------------
 
-_CONTEXT_NOTE = (
-    "[yellow]Note:[/yellow] [dim]This analysis is context-unaware. "
-    "Some findings may not apply depending on the type of endpoint "
-    "(HTML page, API, static asset, file download). "
-    "Review results accordingly.[/dim]"
-)
+_CONTEXT_NOTE = ""
+
+
+def set_context_note(context: str) -> None:
+    """State the assumption the report was produced under, so it is never implicit."""
+    global _CONTEXT_NOTE
+    if context == 'public':
+        _CONTEXT_NOTE = (
+            "[yellow]Assuming:[/yellow] [dim]a response carrying nothing specific to a "
+            "signed-in user (--context public). Caching checks are graded accordingly.[/dim]"
+        )
+    else:
+        _CONTEXT_NOTE = (
+            "[yellow]Assuming:[/yellow] [dim]a response carrying data belonging to a "
+            "signed-in user. Pass --context public if it carries nothing user-specific.[/dim]"
+        )
 
 
 def _print_banner():
@@ -48,7 +58,8 @@ def _print_banner():
         "[bold white]HSHA[/bold white] [dim]— HTTP Security Header Analyzer[/dim]",
         border_style="bright_blue",
     ))
-    console.print(_CONTEXT_NOTE)
+    if _CONTEXT_NOTE:
+        console.print(_CONTEXT_NOTE)
     console.print()
 
 

@@ -11,6 +11,7 @@ A CLI tool that parses raw HTTP responses and evaluates security headers. Produc
 - Checks presence and correct configuration of security headers
 - Two built-in profiles: **basic** (11 headers) and **extended** (24 headers)
 - Three output formats: rich table (`text`), plain list (`list`), machine-readable (`json`)
+- Response context (`--context authenticated|public`) for the checks whose correct value depends on it
 - Two display modes: `severity` (CRITICAL/HIGH/MEDIUM/LOW/INFO/NOTE) and `simple` (PASS/FAIL)
 - Duplicate headers resolved per header the way browsers do (first wins, last wins, join, strictest); repeated identical values are a NOTE, conflicting ones a LOW finding
 - CSP deep analysis via built-in Python evaluator
@@ -100,6 +101,30 @@ Shows PASS/FAIL per header with a list of issues.
 Shows severity level (CRITICAL / HIGH / MEDIUM / LOW / INFO / NOTE / OK) for each header and finding.
 
 A finding counts as an issue from LOW upwards. OK, NOTE and INFO never mark a header as FAIL and never affect the exit code — they are still printed, grouped under their own section in `--mode simple`.
+
+---
+
+## Response Context
+
+Most checks give the same verdict whatever the response carries. Caching does
+not: `Cache-Control: public, max-age=31536000` is correct for a static asset and
+a data leak on an account page. HSHA therefore asks instead of guessing.
+
+```bash
+# Default — assumes the response carries data belonging to a signed-in user
+python check_headers.py response.txt
+
+# The response carries nothing user-specific
+python check_headers.py response.txt --context public
+```
+
+The default is `authenticated` because under-reporting on a sensitive page is
+worse than the reverse: a missing finding goes unnoticed, an inapplicable one is
+obvious and fixed with a flag. The report states which assumption it was produced
+under.
+
+Only `Cache-Control` is affected; every other check gives the same verdict either
+way. [`RULES.md`](RULES.md) explains why.
 
 ---
 
