@@ -394,7 +394,7 @@ CACHE_CASES = [
     ("public, max-age=600",         Severity.INFO,   Severity.HIGH),
     ('no-cache="Set-Cookie"',       Severity.INFO,   Severity.HIGH),
     ('private="X-Custom"',          Severity.INFO,   Severity.HIGH),
-    ("surrogate-control=xyz",       Severity.INFO,   Severity.HIGH),
+    ("surrogate-control=xyz",       Severity.INFO,   Severity.MEDIUM),
 ]
 
 
@@ -421,3 +421,15 @@ def test_a_cacheable_authenticated_response_names_the_leak():
 def test_missing_cache_control_is_a_finding_only_in_the_authenticated_context():
     assert analyze("X-Nothing: x")['cache-control'].worst_severity == Severity.MEDIUM
     assert analyze("X-Nothing: x", config=public())['cache-control'].worst_severity == Severity.INFO
+
+
+def test_cache_control_with_no_understood_directive_matches_an_absent_header():
+    """Unrecognised tokens say nothing to a cache, so heuristic freshness applies
+    exactly as it does with no header at all."""
+    absent = analyze("X-Nothing: x")['cache-control'].worst_severity
+    assert severity_for("Cache-Control", "zzz-bogus") == absent
+    assert has(findings_for("Cache-Control", "zzz-bogus"), "no directive a cache understands")
+
+
+def test_one_understood_directive_is_enough_to_be_judged_on_its_merits():
+    assert severity_for("Cache-Control", "max-age=600, zzz-bogus") == Severity.HIGH

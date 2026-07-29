@@ -354,7 +354,7 @@ Only `no-store` keeps such a response out of every cache.
 | `private` | LOW | Shared caches will not store it, so it cannot reach another user — but the browser still writes it to disk, where the back button after logout, or the next person on that machine, can recover it |
 | `no-cache` | MEDIUM | Forces revalidation before reuse; it does **not** prevent storage. A shared cache may keep this user's response, and nothing marks it as belonging to one user. `max-age=0` with `must-revalidate` is graded the same, being the same round trip |
 | Anything else that a shared cache may store | **HIGH** | A CDN or proxy may keep the response under this URL and serve it to the next person who asks — one user's data handed to another. Covers `max-age`, `s-maxage`, `public`, and the qualified forms `private="Field"` / `no-cache="Field"`, which cover only the fields they name |
-| Absent | MEDIUM | With no instruction, caches fall back to heuristic freshness and may store it anyway |
+| Absent, or no token a cache understands | MEDIUM | With no instruction, caches fall back to heuristic freshness and may store it anyway. A value made only of unrecognised tokens says nothing either, so it is graded the same |
 
 #### Assuming a response carrying nothing user-specific (`--context public`)
 

@@ -707,7 +707,7 @@ _CACHE_CONTROL_DIRECTIVES = {
 }
 
 
-def _check_cache_control_authenticated(value: str, directives: dict) -> list[Finding]:
+def _check_cache_control_authenticated(value: str, directives: dict, extra: dict) -> list[Finding]:
     """
     Grade Cache-Control for a response carrying a signed-in user's data.
 
@@ -718,6 +718,20 @@ def _check_cache_control_authenticated(value: str, directives: dict) -> list[Fin
     """
     def bare(name: str) -> bool:
         return name in directives and not directives[name]
+
+    # Nothing a cache understands was said, so heuristic freshness applies just as
+    # it does with no header at all — and the two are graded alike.
+    if not set(directives) & _CACHE_CONTROL_DIRECTIVES:
+        return [Finding(
+            header='Cache-Control',
+            severity=extra.get(ABSENT_SEVERITY, Severity.MEDIUM),
+            title=f"Cache-Control: '{value}' holds no directive a cache understands",
+            description="None of these tokens is a standard cache directive, so caches ignore "
+                        "them and fall back to heuristic freshness — the same position as sending "
+                        "no Cache-Control at all. Nothing keeps this user's response out of a "
+                        "shared cache.",
+            recommendation="Use no-store for a response carrying a signed-in user's data.",
+        )]
 
     if 'no-store' in directives:
         return [Finding('Cache-Control', Severity.OK,
@@ -776,7 +790,7 @@ def _check_cache_control(value: str, extra: dict) -> list[Finding]:
     directives = _parse_directives(value, ',')
 
     if extra.get(CONTEXT) == CONTEXT_AUTHENTICATED:
-        return _check_cache_control_authenticated(value, directives)
+        return _check_cache_control_authenticated(value, directives, extra)
 
     if 'no-store' in directives:
         findings.append(Finding('Cache-Control', Severity.OK, "Cache-Control: no-store (sensitive data not cached)"))
