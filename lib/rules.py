@@ -579,6 +579,39 @@ def _coop_not_applied(extra: dict, reason: str, recommendation: str = "") -> Fin
     )
 
 
+# What the two *-allow-popups values give up, which is the same thing for both:
+# per the Window.open() table in HTML §7.1.3.1 a popup that sends no COOP of its
+# own stays in the opener's browsing context group.
+_COOP_ALLOW_POPUPS_KEPT = {
+    'same-origin-allow-popups':
+        "No cross-origin document can open this one into an existing browsing context "
+        "group, so the protection COOP mainly exists for is in place.",
+    'noopener-allow-popups':
+        "Nothing can open this document into an existing browsing context group, not "
+        "even a same-origin one — stricter than same-origin in that direction. It does "
+        "not provide cross-origin isolation, though: that needs same-origin plus COEP.",
+}
+
+
+def _coop_allow_popups(token: str) -> Finding:
+    """Graded INFO, not as a weakness: the exposure is toward windows this document
+    chose to open, and `same-origin` is not available to a site that needs to keep a
+    reference to one — an OAuth or payment popup is what these values exist for."""
+    return Finding(
+        header='Cross-Origin-Opener-Policy',
+        severity=Severity.INFO,
+        title=f"COOP: {token} keeps a reference to the windows this document opens",
+        description=f"{_COOP_ALLOW_POPUPS_KEPT[token]} What it gives up is in the other "
+                    "direction: a window this document opens with window.open() stays in its "
+                    "browsing context group if that window sends no COOP of its own, so the "
+                    "window keeps a window.opener reference back and can probe this document "
+                    "through it. That only matters if this document opens windows it does not "
+                    "control.",
+        recommendation="Use same-origin instead if this document does not need to keep a "
+                       "reference to a window it opens.",
+    )
+
+
 def _check_coop(value: str, extra: dict) -> list[Finding]:
     # RFC 8941 §4.2 fails parsing when anything follows the first item, and a comma
     # is how a browser sees the header sent twice, so two occurrences cancel it out
@@ -595,28 +628,8 @@ def _check_coop(value: str, extra: dict) -> list[Finding]:
         return [_coop_not_applied(extra, f"'{value.strip()}' is not a valid header value")]
     if n == 'same-origin':
         return [Finding('Cross-Origin-Opener-Policy', Severity.OK, "COOP: same-origin (optimal)")]
-    if n == 'same-origin-allow-popups':
-        return [Finding(
-            header='Cross-Origin-Opener-Policy',
-            severity=Severity.LOW,
-            title="COOP: same-origin-allow-popups",
-            description="Weaker than same-origin; allows popups to cross-origin pages.",
-            recommendation="Use same-origin if cross-origin popups are not needed.",
-        )]
-    if n == 'noopener-allow-popups':
-        return [Finding(
-            header='Cross-Origin-Opener-Policy',
-            severity=Severity.LOW,
-            title="COOP: noopener-allow-popups",
-            description="Nothing can open this document into an existing browsing context group, "
-                        "not even a same-origin document. But a popup this document opens with "
-                        "window.open() stays in the group and keeps a window.opener reference "
-                        "back to it — the same residual exposure as same-origin-allow-popups. It "
-                        "also does not provide cross-origin isolation, which needs same-origin "
-                        "together with COEP.",
-            recommendation="Use same-origin if this document does not need to keep a reference "
-                           "to the popups it opens.",
-        )]
+    if n in ('same-origin-allow-popups', 'noopener-allow-popups'):
+        return [_coop_allow_popups(n)]
     if n == 'unsafe-none':
         return [Finding(
             header='Cross-Origin-Opener-Policy',

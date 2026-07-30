@@ -1,7 +1,7 @@
 """Table-driven tests for the per-header value checkers in lib/rules.py."""
 import pytest
 
-from lib.models import Severity
+from lib.models import Severity, is_issue
 
 from conftest import analyze, findings_for, has, public, severity_for
 
@@ -37,8 +37,8 @@ CASES = [
 
     # --- Cross-Origin-Opener-Policy ---
     ("Cross-Origin-Opener-Policy", "same-origin", Severity.OK),
-    ("Cross-Origin-Opener-Policy", "same-origin-allow-popups", Severity.LOW),
-    ("Cross-Origin-Opener-Policy", "noopener-allow-popups", Severity.LOW),
+    ("Cross-Origin-Opener-Policy", "same-origin-allow-popups", Severity.INFO),
+    ("Cross-Origin-Opener-Policy", "noopener-allow-popups", Severity.INFO),
     ("Cross-Origin-Opener-Policy", "unsafe-none", Severity.MEDIUM),
     ("Cross-Origin-Opener-Policy", 'same-origin; report-to="coop"', Severity.OK),
     # Every value a browser cannot apply carries the severity of an absent COOP.
@@ -533,6 +533,26 @@ def test_coop_noopener_allow_popups_matches_same_origin_allow_popups():
     in the same browsing context group, so both carry the same residual exposure."""
     assert (severity_for("Cross-Origin-Opener-Policy", "noopener-allow-popups")
             == severity_for("Cross-Origin-Opener-Policy", "same-origin-allow-popups"))
+
+
+@pytest.mark.parametrize("value", ["same-origin-allow-popups", "noopener-allow-popups"])
+def test_coop_allow_popups_is_not_reported_as_a_defect(value):
+    """Both keep the protection COOP mainly exists for — nothing can open the
+    document into an existing browsing context group. What they give up is a
+    reference to windows the document itself opened, which is the whole point of
+    the value and cannot be judged from the response, so it is stated rather than
+    failed. same-origin is not an available answer to a site that needs an OAuth
+    or payment popup."""
+    findings = findings_for("Cross-Origin-Opener-Policy", value)
+    assert not any(is_issue(f.severity) for f in findings)
+    # Not failing it is not the same as staying quiet about it.
+    assert "window.opener" in findings[0].description
+    assert "windows it does not control" in findings[0].description
+
+
+@pytest.mark.parametrize("value", ["same-origin-allow-popups", "noopener-allow-popups"])
+def test_coop_allow_popups_still_points_at_same_origin(value):
+    assert "same-origin" in findings_for("Cross-Origin-Opener-Policy", value)[0].recommendation
 
 
 def test_coop_unusable_value_follows_a_config_override():

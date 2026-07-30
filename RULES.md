@@ -252,8 +252,7 @@ Strict-Transport-Security:
 | Value | Severity | Rationale |
 |---|---|---|
 | `same-origin` | OK | Full cross-origin isolation — optimal |
-| `same-origin-allow-popups` | LOW | Weaker; allows popups to cross-origin pages |
-| `noopener-allow-popups` | LOW | Same residual exposure as `same-origin-allow-popups` |
+| `same-origin-allow-popups`, `noopener-allow-popups` | INFO | Keep a reference to the windows this document opens |
 | `unsafe-none` | MEDIUM | Disables cross-origin isolation; no Spectre/XS-Leak protection |
 | Anything a browser cannot apply | Same as absent | No policy applies, so the response is where it would be with no header |
 
@@ -277,13 +276,23 @@ and nothing in the response says so. That covers four cases:
   and RFC 8941 §4.2 fails parsing when anything follows the first item, so **two
   COOP headers cancel each other out — including two identical ones**
 
-**Why `noopener-allow-popups` is not graded above `same-origin-allow-popups`.**
-It is stricter about being opened — nothing shares a browsing context group with
-it, not even a same-origin document. But per the `Window.open()` table in HTML
-§7.1.3.1, both values keep a popup that has no COOP in the group, so in both
-cases a cross-origin popup the document opens retains a `window.opener` reference
-back to it. That residual exposure is identical, and `noopener-allow-popups` does
-not provide cross-origin isolation either — that needs `same-origin` plus COEP.
+**Why the two `*-allow-popups` values are INFO and not a weakness.** Both keep
+the protection COOP mainly exists for: no cross-origin document can open this one
+into an existing browsing context group, so an attacker cannot open the page and
+probe it through the returned window. What they give up is the other direction —
+per the `Window.open()` table in HTML §7.1.3.1, a window this document opens
+stays in its group if that window sends no COOP of its own, and so keeps a
+`window.opener` reference back. Whether that matters depends on something the
+response cannot say: if the document opens only an OAuth or payment provider it
+chose, the other party is trusted, and `same-origin` is not an available answer
+because it breaks that integration outright. So the exposure is stated and not
+counted as a failure.
+
+The two differ only in a direction that does not change this. `noopener-allow-popups`
+is *stricter* about being opened — not even a same-origin document shares a group
+with it — but it does not provide cross-origin isolation either, which needs
+`same-origin` plus COEP. Their residual exposure is identical, so they carry one
+verdict.
 
 ---
 

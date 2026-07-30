@@ -13,7 +13,7 @@ A CLI tool that parses raw HTTP responses and evaluates security headers. Produc
 - Three output formats: rich table (`text`), plain list (`list`), machine-readable (`json`)
 - Response context (`--context authenticated|public`) for the checks whose correct value depends on it
 - Two display modes: `severity` (CRITICAL/HIGH/MEDIUM/LOW/INFO/NOTE) and `simple` (PASS/FAIL)
-- Duplicate headers resolved per header the way browsers do (first wins, last wins, join, strictest); repeated identical values are a NOTE, conflicting ones a LOW finding
+- Duplicate headers resolved per header the way browsers do (first wins, last wins, join, strictest); losing a value to the resolution is a LOW finding, otherwise a NOTE — and the resolved value is then checked like any other, which is how two `Cross-Origin-Opener-Policy` headers are caught cancelling each other out
 - CSP deep analysis via built-in Python evaluator
 - Fully customizable via YAML config: override severities, mark headers as required/optional, assert expected values
 - Full documentation of every check, condition, and severity in [`RULES.md`](RULES.md)
