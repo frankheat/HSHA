@@ -359,13 +359,17 @@ def _validate_value(
 # Individual header checkers
 # ---------------------------------------------------------------------------
 
-def _split_outside_quotes(value: str, separator: str) -> list[str]:
+def _split_outside_quotes(value: str, separator: str, keep_empty: bool = False) -> list[str]:
     """
     Split on `separator`, ignoring separators inside a quoted-string.
 
     Header values carry quoted arguments — `no-cache="Set-Cookie"`, and any
     directive value may be quoted per RFC 6797 §6.1 — so a plain split would cut
     a quoted value containing the separator in half.
+
+    Empty segments are dropped, because for a list of directives a stray separator
+    means nothing. Pass keep_empty=True where it does mean something: in a
+    structured field an empty segment is a parse error, not a directive to skip.
     """
     parts: list[str] = []
     current: list[str] = []
@@ -379,7 +383,7 @@ def _split_outside_quotes(value: str, separator: str) -> list[str]:
         else:
             current.append(char)
     parts.append(''.join(current))
-    return [p.strip() for p in parts if p.strip()]
+    return [p.strip() for p in parts if keep_empty or p.strip()]
 
 
 def _parse_directives(value: str, separator: str) -> dict[str, Optional[str]]:
@@ -539,24 +543,56 @@ def _check_x_content_type_options(value: str, extra: dict) -> list[Finding]:
     )]
 
 
+# RFC 8941 §3.3.4 (sf-token) and §3.1.2 (parameter names).
+_SF_TOKEN = re.compile(r"^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:/]*$")
+_SF_PARAM_NAME = re.compile(r"^[a-z*][a-z0-9_.*-]*$")
+
+
+def _coop_token(value: str) -> Optional[str]:
+    """The policy token a browser reads out of a COOP header, or None when the
+    header does not parse.
+
+    COOP is a structured field of type item (HTML §7.1.3.1): one token, which may
+    carry parameters — of these only `report-to` is defined, and no parameter
+    changes which policy applies. What does matter is that a value which fails to
+    parse leaves the policy at unsafe-none, so the header does nothing at all.
+    """
+    parts = _split_outside_quotes(value, ';', keep_empty=True)
+    token = parts[0].strip()
+    if not _SF_TOKEN.match(token):
+        return None
+    if not all(_SF_PARAM_NAME.match(p.partition('=')[0].strip()) for p in parts[1:]):
+        return None
+    return token.lower()
+
+
+def _coop_not_applied(extra: dict, reason: str, recommendation: str = "") -> Finding:
+    """COOP graded as absent, because that is the position the response is in."""
+    return Finding(
+        header='Cross-Origin-Opener-Policy',
+        severity=extra.get(ABSENT_SEVERITY, Severity.MEDIUM),
+        title=f"COOP: the header is not applied — {reason}",
+        description="A browser that cannot use this value applies unsafe-none, so this response "
+                    "has no COOP at all — the same position as never sending the header, with "
+                    "no Spectre/XS-Leak protection. Nothing in the response says so.",
+        recommendation=recommendation or "Set Cross-Origin-Opener-Policy: same-origin",
+    )
+
+
 def _check_coop(value: str, extra: dict) -> list[Finding]:
-    # COOP is a structured field of type item (HTML §7.1.3.1). RFC 8941 §4.2 fails
-    # parsing when anything follows the first item, and the HTML algorithm then
-    # leaves the policy at unsafe-none. A comma is how a browser sees the header
-    # sent twice, so two occurrences cancel it out even when they say the same thing.
+    # RFC 8941 §4.2 fails parsing when anything follows the first item, and a comma
+    # is how a browser sees the header sent twice, so two occurrences cancel it out
+    # even when they say the same thing.
     if len(_split_outside_quotes(value, ',')) > 1:
-        return [Finding(
-            header='Cross-Origin-Opener-Policy',
-            severity=extra.get(ABSENT_SEVERITY, Severity.MEDIUM),
-            title="COOP: the header is not valid — it carries more than one value",
-            description="Cross-Origin-Opener-Policy must hold a single token. A browser that "
-                        "cannot parse it applies unsafe-none, so this response has no COOP at "
-                        "all — the same position as never sending the header. Sending the "
-                        "header twice produces this, even when both copies are identical.",
-            recommendation="Send Cross-Origin-Opener-Policy: same-origin once.",
+        return [_coop_not_applied(
+            extra,
+            "it carries more than one value",
+            "Send Cross-Origin-Opener-Policy: same-origin once.",
         )]
 
-    n = value.strip().lower()
+    n = _coop_token(value)
+    if n is None:
+        return [_coop_not_applied(extra, f"'{value.strip()}' is not a valid header value")]
     if n == 'same-origin':
         return [Finding('Cross-Origin-Opener-Policy', Severity.OK, "COOP: same-origin (optimal)")]
     if n == 'same-origin-allow-popups':
@@ -567,6 +603,20 @@ def _check_coop(value: str, extra: dict) -> list[Finding]:
             description="Weaker than same-origin; allows popups to cross-origin pages.",
             recommendation="Use same-origin if cross-origin popups are not needed.",
         )]
+    if n == 'noopener-allow-popups':
+        return [Finding(
+            header='Cross-Origin-Opener-Policy',
+            severity=Severity.LOW,
+            title="COOP: noopener-allow-popups",
+            description="Nothing can open this document into an existing browsing context group, "
+                        "not even a same-origin document. But a popup this document opens with "
+                        "window.open() stays in the group and keeps a window.opener reference "
+                        "back to it — the same residual exposure as same-origin-allow-popups. It "
+                        "also does not provide cross-origin isolation, which needs same-origin "
+                        "together with COEP.",
+            recommendation="Use same-origin if this document does not need to keep a reference "
+                           "to the popups it opens.",
+        )]
     if n == 'unsafe-none':
         return [Finding(
             header='Cross-Origin-Opener-Policy',
@@ -575,11 +625,14 @@ def _check_coop(value: str, extra: dict) -> list[Finding]:
             description="unsafe-none provides no Spectre/XS-Leak protection.",
             recommendation="Set Cross-Origin-Opener-Policy: same-origin",
         )]
-    return [Finding(
-        header='Cross-Origin-Opener-Policy',
-        severity=Severity.INFO,
-        title=f"COOP: unrecognized value '{value}'",
-    )]
+    if n == 'same-origin-plus-coep':
+        return [_coop_not_applied(
+            extra,
+            "same-origin-plus-COEP cannot be set through this header",
+            "It is the result of Cross-Origin-Opener-Policy: same-origin together with "
+            "Cross-Origin-Embedder-Policy: require-corp, not a value to send.",
+        )]
+    return [_coop_not_applied(extra, f"'{n}' is not a policy browsers recognize")]
 
 
 def _check_coep(value: str, extra: dict) -> list[Finding]:

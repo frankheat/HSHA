@@ -38,8 +38,14 @@ CASES = [
     # --- Cross-Origin-Opener-Policy ---
     ("Cross-Origin-Opener-Policy", "same-origin", Severity.OK),
     ("Cross-Origin-Opener-Policy", "same-origin-allow-popups", Severity.LOW),
+    ("Cross-Origin-Opener-Policy", "noopener-allow-popups", Severity.LOW),
     ("Cross-Origin-Opener-Policy", "unsafe-none", Severity.MEDIUM),
-    ("Cross-Origin-Opener-Policy", "bogus", Severity.INFO),
+    ("Cross-Origin-Opener-Policy", 'same-origin; report-to="coop"', Severity.OK),
+    # Every value a browser cannot apply carries the severity of an absent COOP.
+    ("Cross-Origin-Opener-Policy", "bogus", Severity.MEDIUM),
+    ("Cross-Origin-Opener-Policy", "same-origin-plus-COEP", Severity.MEDIUM),
+    ("Cross-Origin-Opener-Policy", "same-origin;", Severity.MEDIUM),
+    ("Cross-Origin-Opener-Policy", "same origin", Severity.MEDIUM),
     ("Cross-Origin-Opener-Policy", "same-origin, same-origin", Severity.MEDIUM),
 
     # --- Cross-Origin-Embedder-Policy ---
@@ -474,3 +480,66 @@ def test_hsts_ignores_unrecognised_directives():
 def test_hsts_accepts_the_quoted_form_the_rfc_shows():
     assert severity_for("Strict-Transport-Security",
                         'max-age="31536000"; includeSubDomains') == Severity.OK
+
+
+# ---------------------------------------------------------------------------
+# COOP: one token plus optional parameters, and nothing else applies
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("value", [
+    'same-origin; report-to="coop-endpoint"',
+    'same-origin;report-to=coop',
+    'same-origin; report-to="a;b"',        # the separator inside a quoted string
+])
+def test_coop_parameters_do_not_change_the_policy(value):
+    """HTML §7.1.3.1 allows the token to carry parameters, of which only report-to
+    is defined. None of them decides which policy applies, so a header configured
+    with a reporting endpoint is still plain same-origin."""
+    assert severity_for("Cross-Origin-Opener-Policy", value) == Severity.OK
+
+
+@pytest.mark.parametrize("value,reason", [
+    ("bogus", "is not a policy browsers recognize"),
+    ("restrict-properties", "is not a policy browsers recognize"),
+    ("same-origin-plus-COEP", "cannot be set through this header"),
+    ("same origin", "is not a valid header value"),        # a space ends the token
+    ('"same-origin"', "is not a valid header value"),       # a string, not a token
+    ("same-origin;", "is not a valid header value"),        # RFC 8941 §4.2.3.2: no key
+    ("same-origin; =x", "is not a valid header value"),
+])
+def test_coop_value_a_browser_cannot_apply_is_graded_as_absent(value, reason):
+    """An unusable value leaves the policy at unsafe-none, which is where a
+    response with no COOP already is."""
+    absent = analyze("X-Nothing: x")['cross-origin-opener-policy'].worst_severity
+    findings = findings_for("Cross-Origin-Opener-Policy", value)
+    assert findings[0].severity == absent
+    assert has(findings, "the header is not applied")
+    assert has(findings, reason)
+
+
+def test_coop_same_origin_plus_coep_says_how_to_actually_get_it():
+    findings = findings_for("Cross-Origin-Opener-Policy", "same-origin-plus-COEP")
+    assert "require-corp" in findings[0].recommendation
+
+
+def test_coop_noopener_allow_popups_is_recognized():
+    """A real value (Chromium, Safari) — it must not fall into the unusable branch."""
+    findings = findings_for("Cross-Origin-Opener-Policy", "noopener-allow-popups")
+    assert not has(findings, "the header is not applied")
+
+
+def test_coop_noopener_allow_popups_matches_same_origin_allow_popups():
+    """Per the Window.open() table in the HTML spec both keep a popup with no COOP
+    in the same browsing context group, so both carry the same residual exposure."""
+    assert (severity_for("Cross-Origin-Opener-Policy", "noopener-allow-popups")
+            == severity_for("Cross-Origin-Opener-Policy", "same-origin-allow-popups"))
+
+
+def test_coop_unusable_value_follows_a_config_override():
+    """The grading tracks whatever the profile says an absent COOP is worth."""
+    from lib.config import AppConfig, HeaderOverride
+    config = AppConfig(overrides={
+        'cross-origin-opener-policy': HeaderOverride(severity_if_missing='high'),
+    })
+    assert analyze("X-Nothing: x", config=config)['cross-origin-opener-policy'].worst_severity == Severity.HIGH
+    assert severity_for("Cross-Origin-Opener-Policy", "bogus", config) == Severity.HIGH

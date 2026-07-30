@@ -253,16 +253,37 @@ Strict-Transport-Security:
 |---|---|---|
 | `same-origin` | OK | Full cross-origin isolation — optimal |
 | `same-origin-allow-popups` | LOW | Weaker; allows popups to cross-origin pages |
+| `noopener-allow-popups` | LOW | Same residual exposure as `same-origin-allow-popups` |
 | `unsafe-none` | MEDIUM | Disables cross-origin isolation; no Spectre/XS-Leak protection |
-| More than one value | Same as absent | The header cannot be parsed, so no policy applies |
-| Any other value | INFO | Unrecognized value |
+| Anything a browser cannot apply | Same as absent | No policy applies, so the response is where it would be with no header |
 
-**Sent more than once.** COOP is a structured field of type *item* (HTML
-§7.1.3.1): a single token. RFC 8941 §4.2 fails parsing when anything follows the
-first item, and the header algorithm then leaves the policy at `unsafe-none`. A
-browser joins repeated headers with a comma, so **two COOP headers cancel each
-other out — including two identical ones**. Nothing in the response says so,
-which is why this carries the severity of an absent COOP rather than a note.
+**What the header may contain.** COOP is a structured field of type *item* (HTML
+§7.1.3.1): a single token, which may carry parameters — of these only `report-to`
+is defined, and no parameter decides which policy applies. So
+`same-origin; report-to="coop-endpoint"` is plain `same-origin` and is graded as
+such.
+
+**When a browser cannot apply the value.** Anything else leaves the policy at the
+`unsafe-none` default, which is the same position as sending no header at all —
+and nothing in the response says so. That covers four cases:
+
+- a token no browser recognises, such as `bogus`
+- `same-origin-plus-COEP`, which is not settable here: it is the *result* of
+  `Cross-Origin-Opener-Policy: same-origin` together with a
+  `Cross-Origin-Embedder-Policy` compatible with cross-origin isolation
+- a value that is not a token followed by valid parameters — `same origin`,
+  `"same-origin"`, or a `;` with no parameter name after it (RFC 8941 §4.2.3.2)
+- the header sent more than once: a browser joins the occurrences with a comma,
+  and RFC 8941 §4.2 fails parsing when anything follows the first item, so **two
+  COOP headers cancel each other out — including two identical ones**
+
+**Why `noopener-allow-popups` is not graded above `same-origin-allow-popups`.**
+It is stricter about being opened — nothing shares a browsing context group with
+it, not even a same-origin document. But per the `Window.open()` table in HTML
+§7.1.3.1, both values keep a popup that has no COOP in the group, so in both
+cases a cross-origin popup the document opens retains a `window.opener` reference
+back to it. That residual exposure is identical, and `noopener-allow-popups` does
+not provide cross-origin isolation either — that needs `same-origin` plus COEP.
 
 ---
 

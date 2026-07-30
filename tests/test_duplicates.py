@@ -171,7 +171,7 @@ def test_duplicate_coop_leaves_the_response_without_coop(first, second):
     )['cross-origin-opener-policy']
     assert result.value == f"{first}, {second}"
     assert duplicate_finding(result).severity == Severity.NOTE
-    invalid = [f for f in result.findings if "not valid" in f.title]
+    invalid = [f for f in result.findings if "not applied" in f.title]
     assert len(invalid) == 1
     assert invalid[0].severity == Severity.MEDIUM     # == severity of an absent COOP
 
