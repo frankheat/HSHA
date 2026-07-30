@@ -40,6 +40,7 @@ CASES = [
     ("Cross-Origin-Opener-Policy", "same-origin-allow-popups", Severity.LOW),
     ("Cross-Origin-Opener-Policy", "unsafe-none", Severity.MEDIUM),
     ("Cross-Origin-Opener-Policy", "bogus", Severity.INFO),
+    ("Cross-Origin-Opener-Policy", "same-origin, same-origin", Severity.MEDIUM),
 
     # --- Cross-Origin-Embedder-Policy ---
     ("Cross-Origin-Embedder-Policy", "require-corp", Severity.OK),

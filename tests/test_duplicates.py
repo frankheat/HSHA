@@ -4,7 +4,8 @@ A value is only lost when the resolution has to pick one occurrence over the
 others, which is what makes it a misconfiguration (LOW): one component's intent
 is discarded, and which one wins comes from a resolution rule rather than from
 anything the site chose. Repeating the same value, or sending a header whose
-occurrences combine, loses nothing and stays a NOTE.
+occurrences combine, discards nothing and stays a NOTE — whether the combined
+value is still valid is then up to that header's own check.
 """
 import pytest
 
@@ -72,8 +73,9 @@ def test_conflicting_duplicates_are_low(header, key, first, second):
     ("Pragma", 'pragma', "no-cache", "no-transform"),
 ])
 def test_joined_duplicates_are_not_a_conflict(header, key, first, second):
-    """Under 'join' every value survives: sending the header twice is how a
-    combined list is expressed, so two different values are additive."""
+    """Under 'join' every value survives, so the duplicate itself is not the
+    misconfiguration — for these headers sending it twice is how a combined
+    list is expressed."""
     result = analyze(f"{header}: {first}", f"{header}: {second}")[key]
     finding = duplicate_finding(result)
     assert finding.severity == Severity.NOTE
@@ -149,6 +151,45 @@ def test_x_frame_options_conflict_is_not_reported_as_optimal():
     """The DENY it resolves to is an accident of the conflict, not a choice."""
     result = analyze("X-Frame-Options: deny", "X-Frame-Options: sameorigin")['x-frame-options']
     assert result.worst_severity > Severity.NOTE
+
+
+# ---------------------------------------------------------------------------
+# COOP — a joined value that no longer parses
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("first,second", [
+    ("same-origin", "same-origin"),      # identical is no consolation here
+    ("same-origin", "unsafe-none"),
+])
+def test_duplicate_coop_leaves_the_response_without_coop(first, second):
+    """COOP is a structured item: RFC 8941 §4.2 fails parsing on anything after
+    the first item, and the browser then applies unsafe-none. So two occurrences
+    have to be graded like the header never being sent."""
+    result = analyze(
+        f"Cross-Origin-Opener-Policy: {first}",
+        f"Cross-Origin-Opener-Policy: {second}",
+    )['cross-origin-opener-policy']
+    assert result.value == f"{first}, {second}"
+    assert duplicate_finding(result).severity == Severity.NOTE
+    invalid = [f for f in result.findings if "not valid" in f.title]
+    assert len(invalid) == 1
+    assert invalid[0].severity == Severity.MEDIUM     # == severity of an absent COOP
+
+
+def test_duplicate_coop_is_never_reported_as_configured():
+    result = analyze(
+        "Cross-Origin-Opener-Policy: same-origin",
+        "Cross-Origin-Opener-Policy: same-origin",
+    )['cross-origin-opener-policy']
+    assert not [f for f in result.findings if f.severity == Severity.OK]
+
+
+def test_join_evaluates_the_combined_value_even_when_occurrences_match():
+    """The browser concatenates regardless of whether the copies agree, so the
+    checks have to run on the concatenation — this is what makes duplicate COOP
+    detectable at all."""
+    result = analyze("Cache-Control: no-store", "Cache-Control: no-store")['cache-control']
+    assert result.value == "no-store, no-store"
 
 
 # ---------------------------------------------------------------------------

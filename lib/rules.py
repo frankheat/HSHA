@@ -55,19 +55,21 @@ _CONTEXT_MISSING: dict[str, dict[str, Severity]] = {
 # Duplicate-header resolution, mirroring real browser behavior:
 #   first     — first occurrence wins (default; e.g. HSTS per RFC 6797 §8.1)
 #   last      — last valid occurrence wins (Referrer-Policy per W3C spec)
-#   join      — occurrences combine into one list/policy set (RFC list headers;
-#               for CSP, multiple headers are all enforced, equivalent to
-#               joining with ',')
+#   join      — occurrences combine into one value (RFC list headers; for CSP,
+#               multiple headers are all enforced, equivalent to joining with
+#               ','). Whether the combined value is still valid is the checker's
+#               business: COOP joins into something no browser can parse.
 #   strictest — conflicting values make browsers block framing (X-Frame-Options)
 # ---------------------------------------------------------------------------
 _DUPLICATE_STRATEGIES: dict[str, str] = {
-    'referrer-policy':         'last',
-    'x-frame-options':         'strictest',
-    'content-security-policy': 'join',
-    'cache-control':           'join',
-    'clear-site-data':         'join',
-    'permissions-policy':      'join',
-    'pragma':                  'join',
+    'referrer-policy':            'last',
+    'x-frame-options':            'strictest',
+    'content-security-policy':    'join',
+    'cache-control':              'join',
+    'clear-site-data':            'join',
+    'permissions-policy':         'join',
+    'pragma':                     'join',
+    'cross-origin-opener-policy': 'join',
 }
 
 
@@ -87,12 +89,15 @@ def _resolve_duplicates(
     strategy = _DUPLICATE_STRATEGIES.get(key, 'first')
     identical = len({v.strip().lower() for v in values}) == 1
 
-    if identical:
+    # 'join' is checked before 'identical': a browser concatenates the occurrences
+    # whether or not they match, and for a header that must hold a single value
+    # (COOP) being identical is no consolation — the concatenation is what breaks it.
+    if strategy == 'join':
+        effective = ', '.join(values)
+        behavior = "browsers combine them into a single header value"
+    elif identical:
         effective = values[0]
         behavior = "the duplicate values are identical"
-    elif strategy == 'join':
-        effective = ', '.join(values)
-        behavior = "browsers combine them into a single list"
     elif strategy == 'last':
         effective = values[-1]
         behavior = "browsers honor the last valid value"
@@ -106,8 +111,8 @@ def _resolve_duplicates(
     seen = f"Values sent: {'; '.join(values)}. Evaluated as '{effective}' because {behavior}."
 
     # A value is only lost when the resolution has to pick one occurrence over the
-    # others. Under 'join' nothing is lost: repeating the header is how a combined
-    # list is expressed, so two different values are additive, not contradictory.
+    # others. Under 'join' no occurrence is discarded, so this stays a NOTE; if the
+    # combined value is not valid, its checker grades that on its own.
     if identical or strategy == 'join':
         return effective, Finding(
             header=canonical,
@@ -535,6 +540,22 @@ def _check_x_content_type_options(value: str, extra: dict) -> list[Finding]:
 
 
 def _check_coop(value: str, extra: dict) -> list[Finding]:
+    # COOP is a structured field of type item (HTML §7.1.3.1). RFC 8941 §4.2 fails
+    # parsing when anything follows the first item, and the HTML algorithm then
+    # leaves the policy at unsafe-none. A comma is how a browser sees the header
+    # sent twice, so two occurrences cancel it out even when they say the same thing.
+    if len(_split_outside_quotes(value, ',')) > 1:
+        return [Finding(
+            header='Cross-Origin-Opener-Policy',
+            severity=extra.get(ABSENT_SEVERITY, Severity.MEDIUM),
+            title="COOP: the header is not valid — it carries more than one value",
+            description="Cross-Origin-Opener-Policy must hold a single token. A browser that "
+                        "cannot parse it applies unsafe-none, so this response has no COOP at "
+                        "all — the same position as never sending the header. Sending the "
+                        "header twice produces this, even when both copies are identical.",
+            recommendation="Send Cross-Origin-Opener-Policy: same-origin once.",
+        )]
+
     n = value.strip().lower()
     if n == 'same-origin':
         return [Finding('Cross-Origin-Opener-Policy', Severity.OK, "COOP: same-origin (optimal)")]

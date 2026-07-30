@@ -45,11 +45,15 @@ effective value the same way browsers do, then evaluates that value:
 
 | Strategy | Headers | Behavior |
 |---|---|---|
-| Identical values | any | Collapsed to the single value |
+| Join | `Content-Security-Policy`, `Cache-Control`, `Clear-Site-Data`, `Permissions-Policy`, `Pragma`, `Cross-Origin-Opener-Policy` | Occurrences combine into a single value |
+| Identical values | any other header | Collapsed to the single value |
 | First wins | default (e.g. `Strict-Transport-Security`, RFC 6797 §8.1) | First occurrence is evaluated |
 | Last wins | `Referrer-Policy` | Browsers honor the last valid value |
-| Join | `Content-Security-Policy`, `Cache-Control`, `Clear-Site-Data`, `Permissions-Policy`, `Pragma` | Occurrences combine into a single list/policy set |
 | Strictest | `X-Frame-Options` | Conflicting values make browsers block framing — evaluated as `DENY` |
+
+Join is applied before the identical-values shortcut, because a browser
+concatenates the occurrences whether or not they agree — and for a header that
+must hold exactly one value, that is the whole point (see COOP below).
 
 The finding always reports the original values, the effective value chosen, and
 why.
@@ -62,6 +66,14 @@ combined list is expressed, so `Cache-Control: max-age=600` followed by
 `Cache-Control: must-revalidate` means exactly what the two directives on one line
 would mean. Two CSP headers are likewise both enforced. These stay a NOTE, and
 there is nothing to fix.
+
+The duplicate finding stays a NOTE under join even when the combined value turns
+out to be unusable — the repetition still discarded nothing. Whether the result
+parses is graded separately by that header's own check, which is where a
+duplicated `Cross-Origin-Opener-Policy` is reported: COOP must hold a single
+token, so the joined value fails to parse and the browser applies `unsafe-none`.
+Two identical COOP headers therefore leave the response with no COOP at all, and
+that is graded like the header being absent.
 
 Under **first**, **last** and **strictest** one occurrence wins and the others are
 discarded. That is a misconfiguration: two components disagree — typically the
@@ -242,7 +254,15 @@ Strict-Transport-Security:
 | `same-origin` | OK | Full cross-origin isolation — optimal |
 | `same-origin-allow-popups` | LOW | Weaker; allows popups to cross-origin pages |
 | `unsafe-none` | MEDIUM | Disables cross-origin isolation; no Spectre/XS-Leak protection |
+| More than one value | Same as absent | The header cannot be parsed, so no policy applies |
 | Any other value | INFO | Unrecognized value |
+
+**Sent more than once.** COOP is a structured field of type *item* (HTML
+§7.1.3.1): a single token. RFC 8941 §4.2 fails parsing when anything follows the
+first item, and the header algorithm then leaves the policy at `unsafe-none`. A
+browser joins repeated headers with a comma, so **two COOP headers cancel each
+other out — including two identical ones**. Nothing in the response says so,
+which is why this carries the severity of an absent COOP rather than a note.
 
 ---
 
