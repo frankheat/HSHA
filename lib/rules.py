@@ -601,7 +601,7 @@ def _coop_allow_popups(token: str) -> Finding:
     return Finding(
         header='Cross-Origin-Opener-Policy',
         severity=Severity.INFO,
-        title=f"COOP: {token} keeps a reference to the windows this document opens",
+        title=f"COOP: {token} lets a window this document opens keep a reference back",
         description=f"{_COOP_ALLOW_POPUPS_KEPT[token]} What it gives up is in the other "
                     "direction: a window this document opens with window.open() stays in its "
                     "browsing context group if that window sends no COOP of its own, so the "

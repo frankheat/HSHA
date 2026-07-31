@@ -252,7 +252,7 @@ Strict-Transport-Security:
 | Value | Severity | Rationale |
 |---|---|---|
 | `same-origin` | OK | Only a same-origin document sending it shares a browsing context group — optimal |
-| `same-origin-allow-popups`, `noopener-allow-popups` | INFO | Keep a reference to the windows this document opens |
+| `same-origin-allow-popups`, `noopener-allow-popups` | INFO | A window they open that sends no COOP of its own keeps a reference back to this document |
 | `unsafe-none` | MEDIUM | Any document that opens this one keeps a reference to it — no XS-Leak protection |
 | Anything a browser cannot apply | Same as absent | No policy applies, so the response is where it would be with no header |
 
