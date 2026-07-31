@@ -46,7 +46,7 @@ def test_identical_duplicates_ignore_case_and_padding():
 def test_identical_duplicates_do_not_make_a_header_fail():
     result = analyze("X-Frame-Options: DENY", "X-Frame-Options: DENY")['x-frame-options']
     assert result.worst_severity == Severity.NOTE
-    assert Severity.NOTE < Severity.INFO      # below the exit-code threshold
+    assert Severity.NOTE < Severity.INFO      # below the issue threshold
 
 
 # ---------------------------------------------------------------------------

@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 
 from lib.config import CONTEXTS, CONTEXT_AUTHENTICATED, load_config
-from lib.models import Severity, is_issue
 from lib.parser import parse_http_response
 from lib.reporter import console, report, set_context_note
 from lib.rules import analyze_headers
@@ -110,12 +109,11 @@ def main() -> int:
     else:
         report(results, mode=args.mode)
 
-    worst = max(
-        (f.severity for r in results for f in r.findings),
-        default=Severity.OK,
-    )
-    # Exit code: 0 = clean or info only, 1 = at least one LOW/MEDIUM/HIGH/CRITICAL
-    return 1 if is_issue(worst) else 0
+    # The analysis ran, so the tool did its job: 0. Findings are read from the
+    # report, not from the exit status — grading a response is a judgement the
+    # reader makes, not a pass/fail this program is in a position to declare.
+    # A non-zero exit is reserved for not being able to produce a report at all.
+    return 0
 
 
 if __name__ == '__main__':

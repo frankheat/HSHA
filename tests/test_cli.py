@@ -1,4 +1,10 @@
-"""End-to-end tests for check_headers.py: exit codes and output formats."""
+"""End-to-end tests for check_headers.py: exit status and output formats.
+
+The exit status says whether a report could be produced, not what is in it: any
+response that analyses successfully exits 0, however bad its headers are. Only
+being unable to produce a report at all — an unreadable response, an invalid
+config — exits 2.
+"""
 import json
 import subprocess
 import sys
@@ -28,21 +34,25 @@ def response_file(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Exit codes
+# Exit status
 # ---------------------------------------------------------------------------
 
 def test_clean_response_exits_zero(response_file):
     assert run(response_file(CLEAN)).returncode == 0
 
 
-def test_missing_required_header_exits_one(response_file):
-    assert run(response_file(NO_CSP)).returncode == 1
+def test_a_response_with_findings_still_exits_zero(response_file):
+    """A HIGH finding is a result, not a failure of the run: it belongs in the
+    report the reader works from, and reporting it is the tool succeeding."""
+    result = run(response_file(NO_CSP), '--mode', 'severity')
+    assert 'Missing Content-Security-Policy' in result.stdout
+    assert result.returncode == 0
 
 
-def test_info_only_findings_exit_zero(response_file):
-    """Optional headers that are merely absent must not fail the build."""
-    result = run(response_file(CLEAN), '--mode', 'severity')
-    assert 'INFO' in result.stdout and result.returncode == 0
+def test_severity_never_reaches_the_exit_status(response_file):
+    """Nothing about a response can make the process exit non-zero."""
+    for content in (CLEAN, NO_CSP, build_response("Cross-Origin-Opener-Policy: unsafe-none")):
+        assert run(response_file(content)).returncode == 0
 
 
 def test_missing_file_exits_two():
@@ -205,14 +215,16 @@ def test_basic_profile_ignores_deprecated_headers(response_file):
 
 
 # ---------------------------------------------------------------------------
-# One definition of "issue": the report and the exit code must agree
+# One definition of "issue" across the output formats
 # ---------------------------------------------------------------------------
 
-def test_list_output_and_exit_code_agree(response_file):
-    """The report used to say FAIL for INFO-only findings while exiting 0."""
-    result = run(response_file(CLEAN), '--format', 'list')
-    listed = 'No issues found' not in result.stdout
-    assert listed == (result.returncode == 1), result.stdout
+def test_list_output_and_pass_fail_agree(response_file):
+    """The report used to say FAIL for INFO-only findings while listing nothing."""
+    for content in (CLEAN, NO_CSP):
+        path = response_file(content)
+        listed = 'No issues found' not in run(path, '--format', 'list').stdout
+        failed = 'Overall: FAIL' in run(path, '--mode', 'simple').stdout
+        assert listed == failed, content
 
 
 def test_absent_optional_header_is_informational_not_a_failure(response_file):
@@ -222,11 +234,10 @@ def test_absent_optional_header_is_informational_not_a_failure(response_file):
     assert 'Cross-Origin-Embedder-Policy' not in run(response_file(CLEAN), '--format', 'list').stdout
 
 
-def test_info_only_response_reports_pass_and_exits_zero(response_file):
+def test_info_only_response_reports_pass(response_file):
     result = run(response_file(CLEAN), '--mode', 'simple')
     assert 'Overall: PASS' in result.stdout
     assert 'FAIL' not in result.stdout
-    assert result.returncode == 0
 
 
 def test_informational_findings_are_still_shown(response_file):

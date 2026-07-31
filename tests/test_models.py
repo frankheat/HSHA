@@ -1,5 +1,5 @@
-"""The Severity ordering is load-bearing: exit codes, issue classification and
-worst-severity aggregation all rely on these comparisons."""
+"""The Severity ordering is load-bearing: issue classification and
+worst-severity aggregation both rely on these comparisons."""
 import pytest
 
 from lib.models import (

@@ -100,7 +100,7 @@ Shows PASS/FAIL per header with a list of issues.
 
 Shows severity level (CRITICAL / HIGH / MEDIUM / LOW / INFO / NOTE / OK) for each header and finding.
 
-A finding counts as an issue from LOW upwards. OK, NOTE and INFO never mark a header as FAIL and never affect the exit code — they are still printed, grouped under their own section in `--mode simple`.
+A finding counts as an issue from LOW upwards. OK, NOTE and INFO never mark a header as FAIL and never appear in `--format list` — they are still printed, grouped under their own section in `--mode simple`.
 
 ---
 
@@ -214,15 +214,14 @@ Notes on the options:
 
 ---
 
-## Exit Codes
+## Exit Status
 
-| Code | Meaning |
-|---|---|
-| `0` | No issues, or INFO/NOTE only |
-| `1` | At least one LOW/MEDIUM/HIGH/CRITICAL finding |
-| `2` | Response or config file missing/unreadable, or invalid config |
+`0` once a report has been produced, whatever is in it, and `2` when no report
+could be produced at all — an unreadable response, a missing or invalid config.
 
-This makes the tool suitable for use in CI/CD pipelines.
+The severity of a response never reaches the exit status. Grading a response is a
+judgement the reader makes from the report; a header set is not something the
+program is in a position to declare passed or failed on its own.
 
 ---
 

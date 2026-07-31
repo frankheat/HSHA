@@ -38,7 +38,7 @@ def test_note_only_is_not_an_issue():
 
 
 def test_info_only_is_not_an_issue():
-    """The exit code treats INFO as clean, so the report must agree."""
+    """`--format list` treats INFO as clean, so PASS/FAIL must agree."""
     assert not reporter._is_issue(result("Cache-Control", finding(Severity.INFO)))
 
 

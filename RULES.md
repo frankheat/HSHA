@@ -16,7 +16,7 @@ This document describes every check implemented by HSHA — what triggers a find
 | **NOTE** | Informational note only (e.g. duplicate header) — never counted as a failure |
 | **OK** | Correctly configured |
 
-A finding counts as an issue from **LOW** upwards. OK, NOTE and INFO are informational: they never mark a header as FAIL, never appear in `--format list`, and never affect the exit code — the tool exits `1` only if at least one finding is LOW or above. Informational findings are still printed, under their own section in `--mode simple` and with their level in `--mode severity`.
+A finding counts as an issue from **LOW** upwards. OK, NOTE and INFO are informational: they never mark a header as FAIL and never appear in `--format list`. They are still printed, under their own section in `--mode simple` and with their level in `--mode severity`. No severity reaches the process exit status, which only reports whether the analysis could be run at all.
 
 ---
 
