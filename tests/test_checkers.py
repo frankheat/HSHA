@@ -37,8 +37,8 @@ CASES = [
 
     # --- Cross-Origin-Opener-Policy ---
     ("Cross-Origin-Opener-Policy", "same-origin", Severity.OK),
-    ("Cross-Origin-Opener-Policy", "same-origin-allow-popups", Severity.INFO),
-    ("Cross-Origin-Opener-Policy", "noopener-allow-popups", Severity.INFO),
+    ("Cross-Origin-Opener-Policy", "same-origin-allow-popups", Severity.LOW),
+    ("Cross-Origin-Opener-Policy", "noopener-allow-popups", Severity.LOW),
     ("Cross-Origin-Opener-Policy", "unsafe-none", Severity.MEDIUM),
     ("Cross-Origin-Opener-Policy", 'same-origin; report-to="coop"', Severity.OK),
     # Every value a browser cannot apply carries the severity of an absent COOP.
@@ -64,8 +64,8 @@ CASES = [
     ("Referrer-Policy", "no-referrer", Severity.OK),
     ("Referrer-Policy", "strict-origin", Severity.OK),
     ("Referrer-Policy", "strict-origin-when-cross-origin", Severity.OK),
-    ("Referrer-Policy", "origin", Severity.INFO),
-    ("Referrer-Policy", "origin-when-cross-origin", Severity.INFO),
+    ("Referrer-Policy", "origin", Severity.LOW),
+    ("Referrer-Policy", "origin-when-cross-origin", Severity.LOW),
     ("Referrer-Policy", "same-origin", Severity.OK),
     ("Referrer-Policy", "no-referrer-when-downgrade", Severity.HIGH),
     ("Referrer-Policy", "unsafe-url", Severity.HIGH),
@@ -357,6 +357,17 @@ def test_referrer_policy_always_is_not_a_header_token():
     assert has(findings, "unrecognized value")
 
 
+@pytest.mark.parametrize("value", ["origin", "origin-when-cross-origin"])
+def test_referrer_policy_origin_pair_asks_for_a_check_not_a_change(value):
+    """Weaker than the strict- variants for nothing in return, so it reaches the
+    worklist — but what it costs depends on whether the page reaches a plain-HTTP
+    destination, which only the reader can settle."""
+    findings = findings_for("Referrer-Policy", value)
+    assert any(is_issue(f.severity) for f in findings)
+    assert findings[0].recommendation.startswith("Check")
+    assert "plain-HTTP" in findings[0].recommendation
+
+
 def test_referrer_policy_unrecognized_value_explains_the_fallback():
     finding = findings_for("Referrer-Policy", "bogus")[0]
     assert "falls back to its own default" in finding.description
@@ -536,23 +547,25 @@ def test_coop_noopener_allow_popups_matches_same_origin_allow_popups():
 
 
 @pytest.mark.parametrize("value", ["same-origin-allow-popups", "noopener-allow-popups"])
-def test_coop_allow_popups_is_not_reported_as_a_defect(value):
-    """Both keep the protection COOP mainly exists for — nothing can open the
-    document into an existing browsing context group. What they give up is a
-    reference to windows the document itself opened, which is the whole point of
-    the value and cannot be judged from the response, so it is stated rather than
-    failed. same-origin is not an available answer to a site that needs an OAuth
-    or payment popup."""
+def test_coop_allow_popups_reaches_the_worklist(value):
+    """Weaker than same-origin, so it is an issue and appears in --format list.
+    Whether the weakening costs anything depends on what the document opens, which
+    the reader can check and the response cannot say — so it is reported, not
+    silently accepted."""
     findings = findings_for("Cross-Origin-Opener-Policy", value)
-    assert not any(is_issue(f.severity) for f in findings)
-    # Not failing it is not the same as staying quiet about it.
+    assert any(is_issue(f.severity) for f in findings)
     assert "window.opener" in findings[0].description
     assert "windows it does not control" in findings[0].description
 
 
 @pytest.mark.parametrize("value", ["same-origin-allow-popups", "noopener-allow-popups"])
-def test_coop_allow_popups_still_points_at_same_origin(value):
-    assert "same-origin" in findings_for("Cross-Origin-Opener-Policy", value)[0].recommendation
+def test_coop_allow_popups_asks_for_a_check_not_a_change(value):
+    """The reader cannot act on 'use same-origin' without first knowing what the
+    page opens — the finding has to name the check, not just the fix."""
+    recommendation = findings_for("Cross-Origin-Opener-Policy", value)[0].recommendation
+    assert recommendation.startswith("Check")
+    assert "window.open()" in recommendation
+    assert "same-origin" in recommendation
 
 
 def test_coop_unusable_value_follows_a_config_override():

@@ -252,7 +252,7 @@ Strict-Transport-Security:
 | Value | Severity | Rationale |
 |---|---|---|
 | `same-origin` | OK | Only a same-origin document sending it shares a browsing context group — optimal |
-| `same-origin-allow-popups`, `noopener-allow-popups` | INFO | A window they open that sends no COOP of its own keeps a reference back to this document |
+| `same-origin-allow-popups`, `noopener-allow-popups` | LOW | A window they open that sends no COOP of its own keeps a reference back to this document |
 | `unsafe-none` | MEDIUM | Any document that opens this one keeps a reference to it — no XS-Leak protection |
 | Anything a browser cannot apply | Same as absent | No policy applies, so the response is where it would be with no header |
 
@@ -276,17 +276,21 @@ and nothing in the response says so. That covers four cases:
   and RFC 8941 §4.2 fails parsing when anything follows the first item, so **two
   COOP headers cancel each other out — including two identical ones**
 
-**Why the two `*-allow-popups` values are INFO and not a weakness.** Both keep
-the protection COOP mainly exists for: no cross-origin document can open this one
-into an existing browsing context group, so an attacker cannot open the page and
-probe it through the returned window. What they give up is the other direction —
-per the `Window.open()` table in HTML §7.1.3.1, a window this document opens
-stays in its group if that window sends no COOP of its own, and so keeps a
-`window.opener` reference back. Whether that matters depends on something the
-response cannot say: if the document opens only an OAuth or payment provider it
-chose, the other party is trusted, and `same-origin` is not an available answer
-because it breaks that integration outright. So the exposure is stated and not
-counted as a failure.
+**What the two `*-allow-popups` values give up.** Both keep the protection COOP
+mainly exists for: no cross-origin document can open this one into an existing
+browsing context group, so an attacker cannot open the page and probe it through
+the returned window. What they give up is the other direction — per the
+`Window.open()` table in HTML §7.1.3.1, a window this document opens stays in its
+group if that window sends no COOP of its own, and so keeps a `window.opener`
+reference back.
+
+Whether that costs anything here depends on something the response cannot say: if
+the document opens only an OAuth or payment provider it chose, the other party is
+trusted and this is the value to use. The finding therefore carries **the check to
+run** — what does this document pass to `window.open()`? — rather than a change to
+make blindly. It is still an issue and still reaches `--format list`, because only
+`same-origin` closes both directions and the reader is the one who can settle the
+condition in a few seconds.
 
 The two differ only in a direction that does not change this. `noopener-allow-popups`
 is *stricter* about being opened than either of the others: only a same-origin
@@ -324,7 +328,7 @@ disclosure — and one every value graded OK below already makes.
 |---|---|---|
 | `no-referrer`, `same-origin` | OK | Nothing |
 | `strict-origin`, `strict-origin-when-cross-origin` | OK | The origin, and only to TLS-protected destinations |
-| `origin`, `origin-when-cross-origin` | INFO | The origin, to plain-HTTP destinations as well |
+| `origin`, `origin-when-cross-origin` | LOW | The origin, to plain-HTTP destinations as well |
 | `no-referrer-when-downgrade` | **HIGH** | The full URL, to every destination reached over HTTPS |
 | `unsafe-url` | **HIGH** | The full URL, to plain-HTTP destinations as well |
 | Anything else | Same as absent | Nothing — no policy is applied at all |
@@ -340,8 +344,14 @@ either way — so where else the URL goes cannot raise them any further, and
 `unsafe-url` is the worse of the two in its description rather than in its level.
 For the origin pair the HTTPS destinations are harmless, since the values graded
 OK disclose exactly the same thing to exactly the same recipients; the plain-HTTP
-destinations are the only difference left, so they are what moves the pair from
-"nothing to report" to "worth knowing".
+destinations are the only difference left, so they are what the pair is graded on.
+
+Whether that difference costs anything depends on whether the page reaches a
+plain-HTTP destination at all, which the response does not say — so the finding
+carries that check. It is still an issue rather than a note, because the pair
+gives up strictly more than `strict-origin-when-cross-origin` and gets nothing
+back: over HTTPS the two behave identically, so there is no case in which the
+weaker value is the one a site needs.
 
 **Absent, or set to something the grammar does not define.** The header defines
 eight tokens and nothing else; a browser skips an unknown one and applies its own

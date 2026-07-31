@@ -595,12 +595,13 @@ _COOP_ALLOW_POPUPS_KEPT = {
 
 
 def _coop_allow_popups(token: str) -> Finding:
-    """Graded INFO, not as a weakness: the exposure is toward windows this document
-    chose to open, and `same-origin` is not available to a site that needs to keep a
-    reference to one — an OAuth or payment popup is what these values exist for."""
+    """Weaker than same-origin, so it is reported — whether the weakening costs
+    anything here depends on what the document opens, which the response does not
+    say. The finding carries that check rather than a change to make blindly: for a
+    site that opens an OAuth or payment provider, this is the value to use."""
     return Finding(
         header='Cross-Origin-Opener-Policy',
-        severity=Severity.INFO,
+        severity=Severity.LOW,
         title=f"COOP: {token} lets a window this document opens keep a reference back",
         description=f"{_COOP_ALLOW_POPUPS_KEPT[token]} What it gives up is in the other "
                     "direction: a window this document opens with window.open() stays in its "
@@ -608,8 +609,9 @@ def _coop_allow_popups(token: str) -> Finding:
                     "window keeps a window.opener reference back and can probe this document "
                     "through it. That only matters if this document opens windows it does not "
                     "control.",
-        recommendation="Use same-origin instead if this document does not need to keep a "
-                       "reference to a window it opens.",
+        recommendation="Check what this document opens with window.open(): a provider the site "
+                       "chose (OAuth, payments) is what this value exists for; a URL the site "
+                       "does not control is not, and same-origin severs it.",
     )
 
 
@@ -774,17 +776,21 @@ def _check_referrer_policy(value: str, extra: dict) -> list[Finding]:
         return [Finding('Referrer-Policy', Severity.OK,
                         f"Referrer-Policy: '{n}' (sends only the origin cross-origin)")]
     if n in origin_in_clear:
-        # Only the site's identity leaks, never a path or query — and that is the
-        # same thing the OK group already hands to every third party over HTTPS.
-        # Worth reporting, not worth failing a build.
+        # Never a path or query, so the disclosure is small — but it is strictly
+        # more than the strict- variants give up, for nothing in return. Whether
+        # it costs anything here depends on what the page reaches, which the
+        # response does not say, so the finding carries the check to run.
         return [Finding(
             header='Referrer-Policy',
-            severity=Severity.INFO,
+            severity=Severity.LOW,
             title=f"Referrer-Policy: '{n}' (sends the origin to plain-HTTP destinations too)",
             description="Only the origin is sent, never the path or query, but it reaches "
-                        "destinations that are not TLS-protected as well.",
-            recommendation="Use strict-origin or strict-origin-when-cross-origin to withhold it "
-                           "on a downgrade.",
+                        "destinations that are not TLS-protected as well, where anyone on the "
+                        "network path reads which site the user is on. The strict- variants are "
+                        "identical except that they withhold it on such a downgrade.",
+            recommendation="Check whether the page links to, or loads anything from, a plain-HTTP "
+                           "destination. Either way strict-origin-when-cross-origin gives up "
+                           "strictly less for the same behaviour over HTTPS.",
         )]
     if n in full_url:
         # These differ only in what happens on a downgrade to plain HTTP. Over
