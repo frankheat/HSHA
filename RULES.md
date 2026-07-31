@@ -251,9 +251,9 @@ Strict-Transport-Security:
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `same-origin` | OK | Full cross-origin isolation — optimal |
+| `same-origin` | OK | Only a same-origin document sending it shares a browsing context group — optimal |
 | `same-origin-allow-popups`, `noopener-allow-popups` | INFO | Keep a reference to the windows this document opens |
-| `unsafe-none` | MEDIUM | Disables cross-origin isolation; no Spectre/XS-Leak protection |
+| `unsafe-none` | MEDIUM | Any document that opens this one keeps a reference to it — no XS-Leak protection |
 | Anything a browser cannot apply | Same as absent | No policy applies, so the response is where it would be with no header |
 
 **What the header may contain.** COOP is a structured field of type *item* (HTML
@@ -360,7 +360,7 @@ in force.
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `require-corp` | OK | Optimal — enables cross-origin isolation |
+| `require-corp` | OK | Optimal — the COEP half of cross-origin isolation, which also needs `COOP: same-origin` |
 | `credentialless` | INFO | Allows cross-origin resources without CORP, strips credentials |
 | `unsafe-none` | LOW | Disables embedding restrictions |
 | Any other value | INFO | Unrecognized value |

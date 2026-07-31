@@ -635,8 +635,11 @@ def _check_coop(value: str, extra: dict) -> list[Finding]:
         return [Finding(
             header='Cross-Origin-Opener-Policy',
             severity=Severity.MEDIUM,
-            title="COOP: unsafe-none disables cross-origin isolation",
-            description="unsafe-none provides no Spectre/XS-Leak protection.",
+            title="COOP: unsafe-none opts this document out of COOP protection",
+            description="Any document that opens this one shares its browsing context group and "
+                        "keeps a reference to its window, which is what XS-Leaks are probed "
+                        "through. It also rules out cross-origin isolation, which needs "
+                        "same-origin together with COEP.",
             recommendation="Set Cross-Origin-Opener-Policy: same-origin",
         )]
     if n == 'same-origin-plus-coep':
