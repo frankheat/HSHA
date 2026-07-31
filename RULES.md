@@ -289,10 +289,14 @@ because it breaks that integration outright. So the exposure is stated and not
 counted as a failure.
 
 The two differ only in a direction that does not change this. `noopener-allow-popups`
-is *stricter* about being opened — not even a same-origin document shares a group
-with it — but it does not provide cross-origin isolation either, which needs
-`same-origin` plus COEP. Their residual exposure is identical, so they carry one
-verdict.
+is *stricter* about being opened than either of the others: only a same-origin
+document sending the same value can navigate to it without a group switch, and
+through `window.open()` it is always a new group, whoever the opener is. That
+makes it stronger than `same-origin` on the way in and weaker on the way out, so
+the two are not ordered — while against `same-origin-allow-popups` it is better
+or equal on both. What it does not do is provide cross-origin isolation, which
+needs `same-origin` plus COEP. Since the exposure that keeps a value out of OK is
+the outgoing one, and that is identical for both, they carry one verdict.
 
 ---
 

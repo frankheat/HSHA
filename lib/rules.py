@@ -587,9 +587,10 @@ _COOP_ALLOW_POPUPS_KEPT = {
         "No cross-origin document can open this one into an existing browsing context "
         "group, so the protection COOP mainly exists for is in place.",
     'noopener-allow-popups':
-        "Nothing can open this document into an existing browsing context group, not "
-        "even a same-origin one — stricter than same-origin in that direction. It does "
-        "not provide cross-origin isolation, though: that needs same-origin plus COEP.",
+        "Only a same-origin document sending this same value can navigate to this one "
+        "without a browsing context group switch, and through window.open() not even "
+        "that — stricter than same-origin in that direction. It does not provide "
+        "cross-origin isolation, though: that needs same-origin plus COEP.",
 }
 
 
