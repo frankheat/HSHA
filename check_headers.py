@@ -97,6 +97,7 @@ def main() -> int:
                         'title': f.title,
                         'description': f.description,
                         'recommendation': f.recommendation,
+                        'verify': f.verify,
                     }
                     for f in r.findings
                 ],

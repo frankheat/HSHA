@@ -87,68 +87,97 @@ def _print_table_severity(results: list[HeaderResult]):
 
     for r in results:
         sev = r.worst_severity
-        status = Text(f"{SEVERITY_SYMBOLS[sev]} {SEVERITY_LABELS[sev]}", style=SEVERITY_COLORS[sev])
+        # '?' rather than the severity symbol: the level is what it is worth if it
+        # applies, and nothing settled has reached it.
+        symbol = "?" if r.is_contingent else SEVERITY_SYMBOLS[sev]
+        status = Text(f"{symbol} {SEVERITY_LABELS[sev]}", style=SEVERITY_COLORS[sev])
         table.add_row(r.canonical_name, status, _val_display(r))
 
     console.print(table)
     console.print()
 
 
-def _print_findings_severity(results: list[HeaderResult]):
-    interesting = [
-        (r, [f for f in r.findings if f.severity > Severity.OK])
-        for r in results
-    ]
-    interesting = [(r, fs) for r, fs in interesting if fs]
+def _print_finding(f):
+    color = SEVERITY_COLORS[f.severity]
+    label = SEVERITY_LABELS[f.severity]
+    console.print(f"  [{color}][{label}][/{color}] [bold]{f.title}[/bold]")
+    if f.description:
+        console.print(f"        [dim]{f.description}[/dim]")
+    if f.recommendation:
+        console.print(f"        [italic]→ {f.recommendation}[/italic]")
+    if f.verify:
+        console.print(f"        [yellow]?[/yellow] [italic]{f.verify}[/italic]")
 
-    if not interesting:
+
+def _print_group(title: str, subtitle: str, groups):
+    console.print(f"[bold]{title}[/bold] [dim]{subtitle}[/dim]")
+    console.print()
+    for result, findings in groups:
+        console.print(f"[bold underline]{result.canonical_name}[/bold underline]")
+        if result.value:
+            console.print(f"  [dim]Value:[/dim] {result.value}")
+        for f in findings:
+            _print_finding(f)
+        console.print()
+
+
+def _print_findings_severity(results: list[HeaderResult]):
+    def group(predicate):
+        pairs = [(r, [f for f in r.findings if f.severity > Severity.OK and predicate(f)])
+                 for r in results]
+        return [(r, fs) for r, fs in pairs if fs]
+
+    settled = group(lambda f: not f.is_contingent)
+    contingent = group(lambda f: f.is_contingent)
+
+    if not settled and not contingent:
         console.print("[green]No issues found.[/green]")
         console.print()
         return
 
-    console.print("[bold]Findings[/bold]")
-    console.print()
+    if settled:
+        _print_group("Findings", "(the response settles these)", settled)
 
-    for result, findings in interesting:
-        console.print(f"[bold underline]{result.canonical_name}[/bold underline]")
-        if result.value:
-            console.print(f"  [dim]Value:[/dim] {result.value}")
+    if contingent:
+        _print_group(
+            "To confirm",
+            "(what these are worth depends on something the response cannot say)",
+            contingent,
+        )
 
-        for f in findings:
-            color = SEVERITY_COLORS[f.severity]
-            label = SEVERITY_LABELS[f.severity]
-            console.print(f"  [{color}][{label}][/{color}] [bold]{f.title}[/bold]")
-            if f.description:
-                console.print(f"        [dim]{f.description}[/dim]")
-            if f.recommendation:
-                console.print(f"        [italic]→ {f.recommendation}[/italic]")
 
-        console.print()
+def _tally(findings) -> str:
+    counts = {s: 0 for s in Severity}
+    for f in findings:
+        counts[f.severity] += 1
+    parts = [
+        f"[{SEVERITY_COLORS[sev]}]{counts[sev]} {SEVERITY_LABELS[sev]}[/{SEVERITY_COLORS[sev]}]"
+        for sev in (Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM,
+                    Severity.LOW, Severity.INFO, Severity.NOTE)
+        if counts[sev]
+    ]
+    return "  ".join(parts) if parts else "[green]none[/green]"
 
 
 def _print_summary_severity(results: list[HeaderResult]):
     all_findings = [f for r in results for f in r.findings]
-    counts = {s: 0 for s in Severity}
-    for f in all_findings:
-        counts[f.severity] += 1
 
     worst = max((f.severity for f in all_findings), default=Severity.OK)
     worst_color = SEVERITY_COLORS[worst]
 
-    parts = []
-    for sev in [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW, Severity.INFO, Severity.NOTE]:
-        if counts[sev]:
-            c = SEVERITY_COLORS[sev]
-            parts.append(f"[{c}]{counts[sev]} {SEVERITY_LABELS[sev]}[/{c}]")
-
     present = sum(1 for r in results if r.is_present)
     missing = sum(1 for r in results if not r.is_present)
 
+    # Kept apart because they are not the same claim: one is what the response
+    # shows, the other is what it would be worth once someone has checked.
     body = (
         f"[bold]Checked:[/bold] {len(results)}   "
         f"[bold]Present:[/bold] [green]{present}[/green]   "
         f"[bold]Missing:[/bold] [red]{missing}[/red]\n"
-        f"[bold]Issues:[/bold]  " + ("  ".join(parts) if parts else "[green]none[/green]")
+        f"[bold]Settled:[/bold]     "
+        + _tally([f for f in all_findings if not f.is_contingent]) + "\n"
+        f"[bold]To confirm:[/bold]  "
+        + _tally([f for f in all_findings if f.is_contingent])
     )
 
     console.print(Panel(

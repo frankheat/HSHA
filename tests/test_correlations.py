@@ -57,11 +57,14 @@ def test_specific_origin_with_credentials_is_informational():
 
 def test_specific_origin_finding_warns_about_origin_reflection():
     """A reflected origin is indistinguishable from an allowlisted one in a
-    single response, so the finding has to tell the reader how to check."""
+    single response, so the finding has to tell the reader how to check — and
+    what a positive result means, since it is far worse than what is printed."""
     finding = next(f for f in cors("https://app.example.com").findings
                    if f.severity == Severity.INFO)
-    assert "reflected" in finding.description
-    assert "Origin" in finding.recommendation
+    assert finding.is_contingent
+    assert "echoes back" in finding.description
+    assert "Origin: https://an-origin-you-made-up.example" in finding.verify
+    assert "does not come back" in finding.verify
 
 
 def test_credentials_without_an_origin_have_no_effect():

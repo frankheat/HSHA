@@ -615,9 +615,10 @@ def _coop_allow_popups(token: str) -> Finding:
                     "window keeps a window.opener reference back and can probe this document "
                     "through it. That only matters if this document opens windows it does not "
                     "control.",
-        recommendation="Check what this document opens with window.open(): a provider the site "
-                       "chose (OAuth, payments) is what this value exists for; a URL the site "
-                       "does not control is not, and same-origin severs it.",
+        verify="What does this document pass to window.open()? A provider the site chose — an "
+               "OAuth or payment flow — is what this value exists for, and there is nothing "
+               "here. A URL the site does not control keeps a window.opener reference back to "
+               "this document, and then this stands: same-origin severs it.",
     )
 
 
@@ -870,9 +871,11 @@ def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:
                         "the embed is there for something else entirely and picks these up "
                         "along the way. Closing them to an embed takes (self); () also takes "
                         "them from this origin.",
-            recommendation="Check what this page embeds. For a frame that is not there to "
-                           "measure or target, closing these costs nothing: "
-                           f"{', '.join(f + '=()' for f in reaches_embeds)}",
+            verify="What does this page embed? For an advertising or analytics frame, reading "
+                   "topics and registering attributions is what it was embedded to do, and "
+                   "there is nothing here. For a frame that is there for something else — a "
+                   "chat widget, a video player — it picks these up along the way, and closing "
+                   f"them costs nothing: {', '.join(f + '=()' for f in reaches_embeds)}",
         ))
 
     one_click = [f for f in _PP_ONE_CLICK if _pp_reaches_this_origin(f, declared)]
@@ -888,9 +891,10 @@ def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:
                         "to tell the two apart grants it. One click is the whole interaction. "
                         "Disabling them removes the prompt itself; (self) does not, because "
                         "an XSS runs on this origin.",
-            recommendation="Check whether this response needs them. If it does not: "
-                           f"{', '.join(f + '=()' for f in one_click)} — a site that uses them "
-                           "on one page can still close them on every other response.",
+            verify="Does this response need them? If it does not, this stands — script that "
+                   "reaches execution here can raise the prompt, and one click grants it: "
+                   f"{', '.join(f + '=()' for f in one_click)}. If it does, the header is "
+                   "per-response, so they can still be closed on every other response.",
         ))
 
     if not findings:
@@ -932,9 +936,11 @@ def _check_referrer_policy(value: str, extra: dict) -> list[Finding]:
                         "destinations that are not TLS-protected as well, where anyone on the "
                         "network path reads which site the user is on. The strict- variants are "
                         "identical except that they withhold it on such a downgrade.",
-            recommendation="Check whether the page links to, or loads anything from, a plain-HTTP "
-                           "destination. Either way strict-origin-when-cross-origin gives up "
-                           "strictly less for the same behaviour over HTTPS.",
+            verify="Does the page link to, or load anything from, a plain-HTTP destination? If "
+                   "it does, the origin reaches whoever is on the network path and this stands. "
+                   "If it does not, nothing leaks today — but the strict- variants behave "
+                   "identically over HTTPS, so they give up strictly less for nothing in return "
+                   "and the change is free either way.",
         )]
     if n in full_url:
         # These differ only in what happens on a downgrade to plain HTTP. Over
@@ -1249,9 +1255,10 @@ def _check_acao(value: str, extra: dict) -> list[Finding]:
                         "the wildcard a browser sends such a request but refuses to hand the "
                         "response to the calling page; with it, an attacker's page reads the "
                         "answer through the browser of whoever can reach the endpoint.",
-            recommendation="Check whether this endpoint is reachable from anywhere or only from "
-                           "certain networks. If access is limited in any way, name the origins "
-                           "allowed to read it instead of using '*'.",
+            verify="Is this endpoint reachable from anywhere, or only from certain networks? "
+                   "Reachable from anywhere and it costs nothing — that is what the wildcard is "
+                   "for. Limited in any way — an internal network, a VPN, localhost — and this "
+                   "stands: name the origins allowed to read it instead of '*'.",
         )]
     if n.lower() == 'null':
         return [Finding(

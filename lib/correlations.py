@@ -32,13 +32,15 @@ def _cors_credentials(results: dict[str, HeaderResult]) -> list[tuple[str, Findi
     if (acac.value or '').strip().lower() != 'true':
         return []
 
-    def finding(severity: Severity, title: str, description: str, recommendation: str = ""):
+    def finding(severity: Severity, title: str, description: str, recommendation: str = "",
+                verify: str = ""):
         return [(_ACAC, Finding(
             header='Access-Control-Allow-Credentials',
             severity=severity,
             title=title,
             description=description,
             recommendation=recommendation,
+            verify=verify,
         ))]
 
     if _ACAO not in results:
@@ -102,11 +104,14 @@ def _cors_credentials(results: dict[str, HeaderResult]) -> list[tuple[str, Findi
     return finding(
         Severity.INFO,
         f"Authenticated cross-origin access is granted to {origin}",
-        f"This response lets {origin} read data using the user's cookies. Check that the "
-        "origin comes from a fixed allowlist and is not copied from the request's Origin "
-        "header: if it is reflected, any site can read the data of logged-in users.",
-        "To verify, replay the request with Origin: https://an-origin-you-made-up.example "
-        "and see whether it comes back in the response.",
+        f"This response lets {origin} read data using the user's cookies. A response that "
+        "echoes back the request's Origin header is byte-for-byte identical to one that "
+        "allowlists that origin, and a single saved response cannot tell them apart.",
+        verify="Replay the request with Origin: https://an-origin-you-made-up.example. If it "
+               "comes back in Access-Control-Allow-Origin, the server reflects whatever it is "
+               "sent: any site reads this endpoint as the logged-in user, which is worse than "
+               "the null case and belongs at the top of the report. If it does not come back, "
+               "the allowlist is real and this is correct authenticated CORS.",
     )
 
 

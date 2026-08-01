@@ -145,6 +145,40 @@ def test_checker_severity(header, value, expected):
     assert severity_for(header, value) == expected
 
 
+def _every_finding():
+    """Every finding the table above can produce, plus those for an absent header."""
+    for header, value, _ in CASES:
+        yield f"{header}: {value}", findings_for(header, value)
+    for result in analyze("X-Nothing: x").values():
+        yield f"missing {result.canonical_name}", result.findings
+
+
+def test_a_finding_never_carries_both_a_check_and_a_recommendation():
+    """Until the check is done there is nothing to recommend: offering both invites
+    the reader to act on a finding that may not apply to this target."""
+    for where, findings in _every_finding():
+        for f in findings:
+            assert not (f.verify and f.recommendation), f"{where} — {f.title}"
+
+
+def test_every_check_asks_something_the_reader_can_answer():
+    """A check that only says 'confirm this' is a reminder to skip. It has to name
+    the question, and the per-finding tests below pin what each outcome means."""
+    for where, findings in _every_finding():
+        for f in findings:
+            if not f.verify:
+                continue
+            assert len(f.verify) > 80, f"{where} — {f.title}"
+            assert '?' in f.verify or f.verify.startswith('Replay'), f"{where} — {f.title}"
+
+
+def test_a_settled_finding_claims_the_response_is_enough():
+    """The empty verify is a claim, not an omission: nothing outside the response
+    changes what max-age=300 or a missing CSP means."""
+    assert not findings_for("Strict-Transport-Security", "max-age=300")[0].verify
+    assert not analyze("X-Nothing: x")['content-security-policy'].findings[0].verify
+
+
 def test_every_checker_returns_at_least_one_finding():
     """A present header must always produce a verdict, never an empty result."""
     for header, value, _ in CASES:
@@ -256,9 +290,9 @@ def test_permissions_policy_does_not_dilute_the_embed_finding():
         assert noise in embed.description      # accounted for, not silently dropped
 
 
-def test_permissions_policy_both_findings_name_a_check():
+def test_permissions_policy_both_findings_carry_their_check():
     for finding in findings_for("Permissions-Policy", "payment=()"):
-        assert finding.recommendation.startswith("Check")
+        assert finding.is_contingent
 
 
 def test_permissions_policy_absent_matches_a_policy_that_closes_nothing():
@@ -328,7 +362,7 @@ def test_acao_wildcard_names_the_case_that_actually_matters():
     finding = findings_for("Access-Control-Allow-Origin", "*")[0]
     assert finding.severity == Severity.MEDIUM
     assert "not by an attacker's server" in finding.description
-    assert "reachable" in finding.recommendation
+    assert "reachable" in finding.verify
 
 
 # ---------------------------------------------------------------------------
@@ -458,8 +492,8 @@ def test_referrer_policy_origin_pair_asks_for_a_check_not_a_change(value):
     destination, which only the reader can settle."""
     findings = findings_for("Referrer-Policy", value)
     assert any(is_issue(f.severity) for f in findings)
-    assert findings[0].recommendation.startswith("Check")
-    assert "plain-HTTP" in findings[0].recommendation
+    assert findings[0].is_contingent
+    assert "plain-HTTP" in findings[0].verify
 
 
 def test_referrer_policy_unrecognized_value_explains_the_fallback():
@@ -656,10 +690,9 @@ def test_coop_allow_popups_reaches_the_worklist(value):
 def test_coop_allow_popups_asks_for_a_check_not_a_change(value):
     """The reader cannot act on 'use same-origin' without first knowing what the
     page opens — the finding has to name the check, not just the fix."""
-    recommendation = findings_for("Cross-Origin-Opener-Policy", value)[0].recommendation
-    assert recommendation.startswith("Check")
-    assert "window.open()" in recommendation
-    assert "same-origin" in recommendation
+    verify = findings_for("Cross-Origin-Opener-Policy", value)[0].verify
+    assert "window.open()" in verify
+    assert "same-origin" in verify
 
 
 # ---------------------------------------------------------------------------

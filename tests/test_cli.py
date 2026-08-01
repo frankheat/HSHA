@@ -162,7 +162,8 @@ def test_json_output_is_parseable_and_shaped(response_file):
     assert csp['value'] is None
     assert csp['severity'] == 'HIGH'
     assert csp['findings'][0]['title'].startswith('Missing')
-    assert set(csp['findings'][0]) == {'severity', 'title', 'description', 'recommendation'}
+    assert set(csp['findings'][0]) == {'severity', 'title', 'description',
+                                       'recommendation', 'verify'}
 
 
 def test_json_severities_are_valid_names(response_file):
