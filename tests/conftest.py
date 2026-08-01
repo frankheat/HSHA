@@ -47,11 +47,15 @@ def profile(name: str) -> AppConfig:
     return load_config(str(ROOT / 'profiles' / f'{name}.yaml'))
 
 
-# The two risk tiers lib/rules.py grades Permissions-Policy against.
-PP_HIGH = ['camera', 'microphone', 'geolocation', 'payment', 'usb', 'display-capture']
-PP_MEDIUM = ['accelerometer', 'gyroscope', 'magnetometer', 'midi', 'screen-wake-lock',
-             'xr-spatial-tracking', 'document-domain', 'publickey-credentials-get']
-PP_FULL = ", ".join(f"{feature}=()" for feature in PP_HIGH + PP_MEDIUM)
+# The features a browser allows to every origin by default. A policy that does not
+# name these leaves them to whatever the page embeds, which is the only part of
+# Permissions-Policy that is a boundary rather than hardening.
+PP_DEFAULT_ANY_ORIGIN = [
+    'attribution-reporting', 'browsing-topics', 'ch-ua-high-entropy-values',
+    'deferred-fetch-minimal', 'gamepad', 'picture-in-picture',
+    'private-state-token-issuance', 'private-state-token-redemption', 'storage-access',
+]
+PP_CLOSED = ", ".join(f"{feature}=()" for feature in PP_DEFAULT_ANY_ORIGIN)
 
 # A response that satisfies every required header of the basic profile.
 CLEAN_HEADERS = [
@@ -63,5 +67,5 @@ CLEAN_HEADERS = [
     "Cross-Origin-Opener-Policy: same-origin",
     "Referrer-Policy: no-referrer",
     "Cache-Control: no-store",
-    f"Permissions-Policy: {PP_FULL}",
+    f"Permissions-Policy: {PP_CLOSED}",
 ]

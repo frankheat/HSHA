@@ -4,7 +4,7 @@ import pytest
 from lib.models import Severity, is_issue
 
 from conftest import (
-    PP_FULL, PP_HIGH, PP_MEDIUM, analyze, findings_for, has, public, severity_for,
+    PP_CLOSED, PP_DEFAULT_ANY_ORIGIN, analyze, findings_for, has, public, severity_for,
 )
 
 
@@ -87,10 +87,10 @@ CASES = [
     ("Clear-Site-Data", '"cache", "cookies", "storage"', Severity.OK),
     ("Clear-Site-Data", '"cookies"', Severity.LOW),
 
-    # --- Permissions-Policy ---
-    ("Permissions-Policy", PP_FULL, Severity.OK),
-    ("Permissions-Policy", PP_FULL.replace("camera=()", "camera=*"), Severity.MEDIUM),
-    ("Permissions-Policy", "geolocation=()", Severity.MEDIUM),          # high-risk left undeclared
+    # --- Permissions-Policy — graded on each feature's default allowlist ---
+    ("Permissions-Policy", PP_CLOSED, Severity.INFO),                   # nothing left to an embed
+    ("Permissions-Policy", "geolocation=()", Severity.LOW),             # the any-origin nine left open
+    ("Permissions-Policy", PP_CLOSED + ", camera=*", Severity.MEDIUM),  # a self default widened
 
     # --- Origin-Agent-Cluster ---
     ("Origin-Agent-Cluster", "?1", Severity.OK),
@@ -195,12 +195,50 @@ def test_clear_site_data_lists_the_missing_directives():
     assert has(findings, '"cache"') and has(findings, '"storage"')
 
 
-def test_permissions_policy_separates_high_and_medium_risk():
-    findings = findings_for("Permissions-Policy", "camera=()")
-    assert any(f.severity == Severity.MEDIUM and "high-risk" in f.title for f in findings)
-    assert any(f.severity == Severity.LOW and "medium-risk" in f.title for f in findings)
-    # the declared feature must not be reported as undeclared
-    assert not any("camera" in f.title for f in findings)
+def test_permissions_policy_grades_by_the_browser_default_not_by_a_feature_list():
+    """camera and payment are allowed to this origin alone whether or not a policy
+    names them, so leaving them out opens nothing to an embedded third party. The
+    features that do default to every origin are what the issue is about."""
+    issues = [f for f in findings_for("Permissions-Policy", "camera=()") if is_issue(f.severity)]
+    assert len(issues) == 1
+    assert "browsing-topics" in issues[0].title
+    assert "payment" not in issues[0].title
+    assert "camera" not in issues[0].title      # declared, so not reported as left open
+
+
+def test_permissions_policy_undeclared_self_default_features_are_not_an_issue():
+    findings = findings_for("Permissions-Policy", PP_CLOSED)
+    assert not any(is_issue(f.severity) for f in findings)
+    assert has(findings, "left at their default of this origin only")
+
+
+def test_permissions_policy_names_the_check_for_the_any_origin_group():
+    """Whether it costs anything depends on what the page embeds, which the
+    response cannot say."""
+    issues = [f for f in findings_for("Permissions-Policy", "camera=()") if is_issue(f.severity)]
+    assert issues[0].recommendation.startswith("Check")
+    assert "cross-origin iframes" in issues[0].recommendation
+
+
+@pytest.mark.parametrize("feature", PP_DEFAULT_ANY_ORIGIN)
+def test_permissions_policy_every_any_origin_feature_is_reported_when_left_out(feature):
+    left_out = ", ".join(f"{f}=()" for f in PP_DEFAULT_ANY_ORIGIN if f != feature)
+    issues = [f for f in findings_for("Permissions-Policy", left_out) if is_issue(f.severity)]
+    assert len(issues) == 1
+    assert issues[0].title.endswith(feature)
+
+
+def test_permissions_policy_does_not_ask_for_a_directive_that_was_dropped():
+    """document-domain is no longer in the directive set, so recommending it would
+    tell the reader to add something a browser ignores."""
+    for f in findings_for("Permissions-Policy", "camera=()"):
+        assert 'document-domain' not in f.title + f.description + f.recommendation
+
+
+def test_permissions_policy_everything_declared_is_ok():
+    from lib.rules import _PP_DEFAULT_ANY_ORIGIN, _PP_DEFAULT_SELF
+    every = ", ".join(f"{f}=()" for f in _PP_DEFAULT_ANY_ORIGIN | _PP_DEFAULT_SELF)
+    assert severity_for("Permissions-Policy", every) == Severity.OK
 
 
 def test_cache_control_no_store_takes_precedence_over_no_cache():
@@ -334,9 +372,18 @@ def test_hsts_rejects_a_non_numeric_max_age():
 def test_permissions_policy_wildcard_is_read_from_the_allowlist():
     """A \\b boundary also matches after the hyphen of an unrelated name, so
     'x-payment=*' used to be reported as a wildcard on 'payment'."""
-    declared = ", ".join(f"{f}=()" for f in PP_HIGH + PP_MEDIUM)
-    assert severity_for("Permissions-Policy", declared + ", x-payment=*") == Severity.OK
-    assert severity_for("Permissions-Policy", declared.replace("payment=()", "payment=*")) == Severity.MEDIUM
+    assert severity_for("Permissions-Policy", PP_CLOSED + ", x-payment=*") == Severity.INFO
+    assert severity_for("Permissions-Policy", PP_CLOSED + ", payment=*") == Severity.MEDIUM
+
+
+def test_permissions_policy_self_is_not_read_as_an_opening():
+    """(self) is the default for these, so stating it changes nothing."""
+    assert severity_for("Permissions-Policy", PP_CLOSED + ", camera=(self)") == Severity.INFO
+
+
+def test_permissions_policy_quoted_comma_does_not_split_a_feature():
+    value = PP_CLOSED + ', camera=("https://a.example,https://b.example")'
+    assert severity_for("Permissions-Policy", value) == Severity.INFO
 
 
 def test_content_disposition_type_is_the_first_token():

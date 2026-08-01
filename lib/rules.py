@@ -749,67 +749,100 @@ def _check_corp(value: str, extra: dict) -> list[Finding]:
     return [Finding('Cross-Origin-Resource-Policy', Severity.INFO, f"CORP: unrecognized value '{value}'")]
 
 
-_PP_HIGH_RISK = {
-    'camera', 'microphone', 'geolocation', 'payment', 'usb', 'display-capture',
+# Every Permissions-Policy directive, with the allowlist a browser applies when a
+# policy does not mention it. This is the axis the checks run on, because it is
+# what an undeclared feature actually leaves open: only nine directives default to
+# `*`, and it is those — not `camera` or `payment` — that an embedded cross-origin
+# document can use unless the policy takes them away.
+_PP_DEFAULT_ANY_ORIGIN = {
+    'attribution-reporting', 'browsing-topics', 'ch-ua-high-entropy-values',
+    'deferred-fetch-minimal', 'gamepad', 'picture-in-picture',
+    'private-state-token-issuance', 'private-state-token-redemption',
+    'storage-access',
 }
-_PP_MEDIUM_RISK = {
-    'accelerometer', 'gyroscope', 'magnetometer', 'midi', 'screen-wake-lock',
-    'xr-spatial-tracking', 'document-domain', 'publickey-credentials-get',
+_PP_DEFAULT_SELF = {
+    'accelerometer', 'ambient-light-sensor', 'aria-notify', 'autoplay', 'bluetooth',
+    'camera', 'captured-surface-control', 'compute-pressure', 'cross-origin-isolated',
+    'deferred-fetch', 'display-capture', 'encrypted-media', 'fullscreen', 'geolocation',
+    'gyroscope', 'hid', 'identity-credentials-get', 'idle-detection', 'language-detector',
+    'local-fonts', 'local-network', 'local-network-access', 'loopback-network',
+    'magnetometer', 'microphone', 'midi', 'on-device-speech-recognition',
+    'otp-credentials', 'payment', 'publickey-credentials-create',
+    'publickey-credentials-get', 'screen-wake-lock', 'serial', 'speaker-selection',
+    'summarizer', 'translator', 'usb', 'web-share', 'window-management',
+    'xr-spatial-tracking',
 }
 
 
 def _parse_pp_features(value: str) -> dict[str, str]:
     """Map each declared feature to its allowlist, e.g. {'camera': '()'}."""
     features: dict[str, str] = {}
-    for part in value.split(','):
-        name, sep, allowlist = part.strip().partition('=')
+    for part in _split_outside_quotes(value, ','):
+        name, sep, allowlist = part.partition('=')
         if sep:
             features[name.strip().lower()] = allowlist.strip()
     return features
 
 
+def _pp_allowlist_origins(allowlist: str) -> list[str]:
+    """The origins inside an allowlist: `*`, `(self)`, `("https://a.example")`."""
+    a = allowlist.strip()
+    if a.startswith('(') and a.endswith(')'):
+        a = a[1:-1]
+    return [token.strip().strip('"') for token in a.split() if token.strip()]
+
+
 def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:
     findings: list[Finding] = []
-    all_sensitive = _PP_HIGH_RISK | _PP_MEDIUM_RISK
     declared = _parse_pp_features(value)
 
     # Read the allowlist of each declared feature rather than searching the raw
     # value: a \b boundary also matches after the hyphen of an unrelated name.
-    wildcarded = sorted(f for f in all_sensitive if declared.get(f) == '*')
-    if wildcarded:
+    opened = sorted(
+        f for f, allowlist in declared.items()
+        if f in _PP_DEFAULT_SELF and '*' in _pp_allowlist_origins(allowlist)
+    )
+    if opened:
         findings.append(Finding(
             header='Permissions-Policy',
             severity=Severity.MEDIUM,
-            title=f"Permissions-Policy: wildcard (*) for: {', '.join(wildcarded)}",
-            description="Wildcard (*) grants any origin access to these browser features.",
-            recommendation="Restrict sensitive features to () (disabled) or (self).",
+            title=f"Permissions-Policy: opened to any origin: {', '.join(opened)}",
+            description="A browser allows these features to this origin only. The policy "
+                        "widens them to '*', so any document embedded in this page can use "
+                        "them — the policy is granting access rather than restricting it.",
+            recommendation="Restrict these to () or (self) unless an embedded third party "
+                           "genuinely needs them.",
         ))
 
-    # Completeness check: sensitive features not mentioned are allowed by default
-    missing_high = _PP_HIGH_RISK - set(declared)
-    missing_medium = _PP_MEDIUM_RISK - set(declared)
-
-    if missing_high:
-        findings.append(Finding(
-            header='Permissions-Policy',
-            severity=Severity.MEDIUM,
-            title=f"Permissions-Policy: high-risk features not explicitly disabled: {', '.join(sorted(missing_high))}",
-            description="Features absent from the policy are allowed by default. "
-                        "OWASP recommends explicitly disabling all sensitive browser features.",
-            recommendation=f"Add to policy: {', '.join(f + '=()' for f in sorted(missing_high))}",
-        ))
-
-    if missing_medium:
+    left_open = sorted(_PP_DEFAULT_ANY_ORIGIN - set(declared))
+    if left_open:
         findings.append(Finding(
             header='Permissions-Policy',
             severity=Severity.LOW,
-            title=f"Permissions-Policy: medium-risk features not explicitly disabled: {', '.join(sorted(missing_medium))}",
-            description="Features absent from the policy are allowed by default.",
-            recommendation=f"Consider adding: {', '.join(f + '=()' for f in sorted(missing_medium))}",
+            title=f"Permissions-Policy: left available to any embedded origin: {', '.join(left_open)}",
+            description="These are the features a browser allows to every origin by default, "
+                        "so a cross-origin document embedded in this page can use them unless "
+                        "the policy says otherwise — mostly tracking and fingerprinting "
+                        "surface. The policy addresses other features but not these.",
+            recommendation="Check whether this page embeds cross-origin iframes. If it does, "
+                           f"restricting them costs nothing: {', '.join(f + '=()' for f in left_open)}",
+        ))
+
+    undeclared_self = _PP_DEFAULT_SELF - set(declared)
+    if undeclared_self:
+        findings.append(Finding(
+            header='Permissions-Policy',
+            severity=Severity.INFO,
+            title=f"Permissions-Policy: {len(undeclared_self)} features left at their default of this origin only",
+            description="A browser already allows these to this origin alone, so an embedded "
+                        "third party cannot use them whether or not the policy names them. "
+                        "Declaring them is hardening against script that already runs here, "
+                        "not a boundary against anyone else.",
         ))
 
     if not findings:
-        findings.append(Finding('Permissions-Policy', Severity.OK, "Permissions-Policy: all sensitive features explicitly addressed"))
+        findings.append(Finding('Permissions-Policy', Severity.OK,
+                                "Permissions-Policy: every feature addressed"))
     return findings
 
 

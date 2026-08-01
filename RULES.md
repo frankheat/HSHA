@@ -509,9 +509,47 @@ The following headers are checked only when using `profiles/extended.yaml`.
 
 | Condition | Severity | Rationale |
 |---|---|---|
-| Wildcard `*` for any sensitive feature | MEDIUM | Any origin gains access to that browser capability |
-| High-risk features not explicitly declared: `camera`, `microphone`, `geolocation`, `payment`, `usb`, `display-capture` | MEDIUM | Undeclared features are allowed by default per spec |
-| Medium-risk features not explicitly declared: `accelerometer`, `gyroscope`, `magnetometer`, `midi`, `screen-wake-lock`, `xr-spatial-tracking`, `document-domain`, `publickey-credentials-get` | LOW | Undeclared features are allowed by default |
+| A feature whose default is this origin only, widened to `*` | MEDIUM | The policy is granting access rather than restricting it: any embedded document gains a capability a browser was already withholding |
+| One of the nine any-origin features left undeclared | LOW | A browser allows these to every origin, so an embedded document can use them until the policy says otherwise |
+| Features whose default is this origin only, left undeclared | INFO | Nothing embedded can use them either way — declaring them is hardening against script already running here |
+
+**What the grading follows: the default allowlist, not a list of feature names.**
+Every directive has a default a browser applies when the policy does not mention
+it, and it is always `*` or `self`. That default is the whole question, because it
+decides what an undeclared feature leaves open:
+
+- **Default `*`** — an embedded cross-origin document can use the feature. Leaving
+  it undeclared is a delegation to whatever the page embeds. Nine directives are
+  in this group: `attribution-reporting`, `browsing-topics`,
+  `ch-ua-high-entropy-values`, `deferred-fetch-minimal`, `gamepad`,
+  `picture-in-picture`, `private-state-token-issuance`,
+  `private-state-token-redemption`, `storage-access` — mostly tracking and
+  fingerprinting surface.
+- **Default `self`** — only this origin can use the feature, declared or not. That
+  covers the other forty, `camera`, `microphone`, `geolocation`, `payment`, `usb`
+  and `display-capture` among them.
+
+So an undeclared `camera` does not let an embedded third party reach the camera;
+a browser was never going to allow that. Declaring it is worth doing — it takes
+the capability away from script that has already achieved execution on the origin
+— but it is hardening, not a boundary, and grading it as an exposure puts the
+loudest finding on the least consequential half of the header.
+
+Whether the any-origin group costs anything depends on whether the page embeds
+cross-origin documents at all, which the response does not say, so that finding
+carries the check to run.
+
+**A widened feature is read from its allowlist**, not searched for in the raw
+value: `x-payment=*` is a different feature from `payment`, and `camera=(self)`
+restates the default rather than opening anything.
+
+**On publishing a list of every feature to disable.** Advice of that shape — set
+all of them to `()` — is sound for whoever configures the site, and costs
+nothing. It is a poor basis for a verdict, for two reasons. It grades the
+hardening half as loudly as the boundary half, and a fixed list goes stale: one
+widely circulated version still names `interest-cohort`, a directive for a feature
+its browser removed, while omitting `browsing-topics`, its successor, which is one
+of the nine that default to `*`.
 
 ---
 
