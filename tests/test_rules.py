@@ -194,9 +194,10 @@ def test_skipped_custom_header_is_not_reported():
 def test_basic_profile_skips_the_extended_only_headers():
     from conftest import profile
     results = analyze("X-Nothing: x", config=profile('basic'))
-    for skipped in ('permissions-policy', 'x-xss-protection', 'expect-ct',
+    for skipped in ('x-xss-protection', 'expect-ct',
                     'origin-agent-cluster', 'access-control-allow-origin'):
         assert skipped not in results
+    assert 'permissions-policy' in results
 
 
 def test_extended_profile_checks_more_headers_than_basic():

@@ -3,12 +3,9 @@ import pytest
 
 from lib.models import Severity, is_issue
 
-from conftest import analyze, findings_for, has, public, severity_for
-
-_PP_HIGH = ['camera', 'microphone', 'geolocation', 'payment', 'usb', 'display-capture']
-_PP_MEDIUM = ['accelerometer', 'gyroscope', 'magnetometer', 'midi', 'screen-wake-lock',
-              'xr-spatial-tracking', 'document-domain', 'publickey-credentials-get']
-PP_FULL = ", ".join(f"{f}=()" for f in _PP_HIGH + _PP_MEDIUM)
+from conftest import (
+    PP_FULL, PP_HIGH, PP_MEDIUM, analyze, findings_for, has, public, severity_for,
+)
 
 
 # (header, value, expected worst severity)
@@ -337,7 +334,7 @@ def test_hsts_rejects_a_non_numeric_max_age():
 def test_permissions_policy_wildcard_is_read_from_the_allowlist():
     """A \\b boundary also matches after the hyphen of an unrelated name, so
     'x-payment=*' used to be reported as a wildcard on 'payment'."""
-    declared = ", ".join(f"{f}=()" for f in _PP_HIGH + _PP_MEDIUM)
+    declared = ", ".join(f"{f}=()" for f in PP_HIGH + PP_MEDIUM)
     assert severity_for("Permissions-Policy", declared + ", x-payment=*") == Severity.OK
     assert severity_for("Permissions-Policy", declared.replace("payment=()", "payment=*")) == Severity.MEDIUM
 

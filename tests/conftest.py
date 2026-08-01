@@ -47,6 +47,12 @@ def profile(name: str) -> AppConfig:
     return load_config(str(ROOT / 'profiles' / f'{name}.yaml'))
 
 
+# The two risk tiers lib/rules.py grades Permissions-Policy against.
+PP_HIGH = ['camera', 'microphone', 'geolocation', 'payment', 'usb', 'display-capture']
+PP_MEDIUM = ['accelerometer', 'gyroscope', 'magnetometer', 'midi', 'screen-wake-lock',
+             'xr-spatial-tracking', 'document-domain', 'publickey-credentials-get']
+PP_FULL = ", ".join(f"{feature}=()" for feature in PP_HIGH + PP_MEDIUM)
+
 # A response that satisfies every required header of the basic profile.
 CLEAN_HEADERS = [
     "Content-Security-Policy: default-src 'none'; script-src 'self'; object-src 'none'; "
@@ -57,4 +63,5 @@ CLEAN_HEADERS = [
     "Cross-Origin-Opener-Policy: same-origin",
     "Referrer-Policy: no-referrer",
     "Cache-Control: no-store",
+    f"Permissions-Policy: {PP_FULL}",
 ]

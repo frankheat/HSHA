@@ -505,7 +505,7 @@ The following headers are checked only when using `profiles/extended.yaml`.
 
 ### Permissions-Policy
 
-**Required:** yes (extended) — **Severity if missing:** MEDIUM
+**Required:** yes — **Severity if missing:** MEDIUM
 
 | Condition | Severity | Rationale |
 |---|---|---|

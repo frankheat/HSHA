@@ -9,7 +9,7 @@ A CLI tool that parses raw HTTP responses and evaluates security headers. Produc
 ## Features
 
 - Checks presence and correct configuration of security headers
-- Two built-in profiles: **basic** (11 headers) and **extended** (24 headers)
+- Two built-in profiles: **basic** (12 headers) and **extended** (24 headers)
 - Three output formats: rich table (`text`), plain list (`list`), machine-readable (`json`)
 - Response context (`--context authenticated|public`) for the checks whose correct value depends on it
 - Two display modes: `severity` (CRITICAL/HIGH/MEDIUM/LOW/INFO/NOTE) and `simple` (PASS/FAIL)
@@ -133,7 +133,7 @@ way. [`RULES.md`](RULES.md) explains why.
 The tool loads `profiles/basic.yaml` by default. Switch to the extended profile with `--config`:
 
 ```bash
-# Basic profile — 11 core headers (default)
+# Basic profile — 12 core headers (default)
 python check_headers.py response.txt
 
 # Extended profile — 24 headers including legacy, deprecated, CORS, caching
@@ -155,7 +155,7 @@ python check_headers.py response.txt --config profiles/extended.yaml
 | X-Permitted-Cross-Domain-Policies | ✓ | ✓ |
 | Cache-Control | ✓ | ✓ |
 | Clear-Site-Data | ✓ | ✓ |
-| Permissions-Policy | | ✓ |
+| Permissions-Policy | ✓ | ✓ |
 | Origin-Agent-Cluster | | ✓ |
 | Access-Control-Allow-Origin | | ✓ |
 | Access-Control-Allow-Credentials | | ✓ |

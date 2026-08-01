@@ -1,6 +1,6 @@
 # HSHA — HTTP Security Header Analyzer — Basic configuration
 #
-# Checks the 11 core security headers.
+# Checks the 12 core security headers.
 # Use this profile for a standard security review.
 #
 # Usage:
@@ -15,8 +15,6 @@ headers:
     require_include_subdomains: true
 
   # --- Headers not in scope for this profile ---
-  Permissions-Policy:
-    skip: true
   X-DNS-Prefetch-Control:
     skip: true
   X-XSS-Protection:
