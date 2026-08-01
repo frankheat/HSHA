@@ -310,6 +310,89 @@ the outgoing one, and that is identical for both, they carry one verdict.
 
 ---
 
+### Permissions-Policy
+
+**Required:** yes — **Severity if missing:** LOW *(the same state a policy that
+closes none of the any-origin features leaves — see below)*
+
+| Condition | Severity | Rationale |
+|---|---|---|
+| A feature whose default is this origin only, widened to `*` | MEDIUM | The policy is granting access rather than restricting it: any embedded document gains a capability a browser was withholding |
+| A tracking feature still reachable by an embedded document | ? INFO | The user's privacy toward a party the site chose to embed — often what that party was embedded to do |
+| `camera`, `microphone` or `geolocation` not set to `()` | ? LOW | Script that achieves execution here can raise their permission prompt, and the prompt names the site rather than the code that asked |
+
+**Two questions, asked separately.** The header answers one thing for documents
+the page embeds and a different thing for script running on the page's own origin,
+and a value can close one without closing the other. Grading them as one number
+loses that, so they are reported as two findings.
+
+**The first axis: what an embedded document can reach.** Every directive has a
+default a browser applies when the policy does not name it, always `*` or `self`.
+Only nine default to `*`, and six of those are worth reporting —
+`attribution-reporting`, `browsing-topics`, `ch-ua-high-entropy-values`,
+`private-state-token-issuance`, `private-state-token-redemption`,
+`storage-access` — because what an embedded document gains from them is tracking
+and fingerprinting surface. The remaining three, `gamepad`, `picture-in-picture`
+and `deferred-fetch-minimal`, are open the same way with nothing behind them, so
+they are stated in the finding but kept out of its title.
+
+Everything else — `camera`, `payment`, `usb`, `display-capture` and the other
+thirty-six — defaults to `self`. An undeclared `camera` does **not** let an
+embedded third party reach the camera: a browser was never going to allow that,
+and the `allow` attribute on an iframe can only narrow what the parent already
+grants, never widen it.
+
+This axis is stated and not counted as a defect. What it describes is the user's
+privacy toward parties the site deliberately embedded, and for an advertising or
+analytics frame, reading the user's topics and registering attributions is the
+reason the frame is there — `browsing-topics=()` would break what the site
+installed on purpose. It earns a look in the opposite case: a frame embedded for
+something else entirely, a chat widget or a video player, that picks these
+capabilities up along the way because nothing took them away. The response cannot
+say which of the two it is.
+
+**The second axis: what an XSS on this origin can reach.** A permission prompt
+names the site, never the code that asked for it. A user looking at *"example.com
+wants to use your camera"* while using example.com has no way to tell a genuine
+request from injected script, and grants it. So the exposure does not depend on
+the origin already holding a stored grant — script that reaches execution here
+can go and ask, and one click is the whole interaction.
+
+That is true of `camera`, `microphone` and `geolocation`. It is not true of the
+features whose prompt is followed by a choice: `display-capture` makes the user
+pick what to share, `usb`, `serial`, `hid` and `bluetooth` make them pick a
+device, `payment` opens a payment flow. There the consent is informed about *what*
+and not only about *who*.
+
+Only `()` closes this axis. `(self)` authorises this origin, and an XSS runs on
+this origin — reading a declared `camera=(self)` as "handled" would be a
+reassuring falsehood. The reverse holds on the first axis, where `(self)` is
+enough because it excludes every other origin.
+
+A site that genuinely uses one of the three can still close it on every response
+that does not, since the header is per-response; the finding asks that rather than
+assuming it.
+
+**A widened feature is read from its allowlist**, not searched for in the raw
+value: `x-payment=*` is a different feature from `payment`, and `camera=(self)`
+restates the default rather than opening anything.
+
+**Sending no header at all** leaves both axes open, which is the same position as
+a policy that closes neither — so it carries the same severity, and a response
+that declares an unrelated feature does not appear to have improved its standing.
+The absent-header finding states both axes and names both sets.
+
+**On publishing a list of every feature to disable.** Advice of that shape — set
+all of them to `()` — is sound for whoever configures the site. It is a poor basis
+for a verdict, and a fixed list goes stale in the place that matters: one widely
+circulated version names `interest-cohort`, a directive for a feature its browser
+removed, and covers two of the nine any-origin directives while covering
+twenty-one of the forty that default to `self`. It is thorough on the axis that
+needs an XSS to matter and nearly silent on the axis that needs nothing else at
+all — because the any-origin APIs mostly postdate it.
+
+---
+
 ### Referrer-Policy
 
 **Required:** yes — **Severity if missing:** MEDIUM
@@ -490,89 +573,6 @@ a question about network position, not about authentication.
 ## Headers — Extended Profile Only
 
 The following headers are checked only when using `profiles/extended.yaml`.
-
----
-
-### Permissions-Policy
-
-**Required:** yes — **Severity if missing:** LOW *(the same state a policy that
-closes none of the any-origin features leaves — see below)*
-
-| Condition | Severity | Rationale |
-|---|---|---|
-| A feature whose default is this origin only, widened to `*` | MEDIUM | The policy is granting access rather than restricting it: any embedded document gains a capability a browser was withholding |
-| A tracking feature still reachable by an embedded document | ? INFO | The user's privacy toward a party the site chose to embed — often what that party was embedded to do |
-| `camera`, `microphone` or `geolocation` not set to `()` | ? LOW | Script that achieves execution here can raise their permission prompt, and the prompt names the site rather than the code that asked |
-
-**Two questions, asked separately.** The header answers one thing for documents
-the page embeds and a different thing for script running on the page's own origin,
-and a value can close one without closing the other. Grading them as one number
-loses that, so they are reported as two findings.
-
-**The first axis: what an embedded document can reach.** Every directive has a
-default a browser applies when the policy does not name it, always `*` or `self`.
-Only nine default to `*`, and six of those are worth reporting —
-`attribution-reporting`, `browsing-topics`, `ch-ua-high-entropy-values`,
-`private-state-token-issuance`, `private-state-token-redemption`,
-`storage-access` — because what an embedded document gains from them is tracking
-and fingerprinting surface. The remaining three, `gamepad`, `picture-in-picture`
-and `deferred-fetch-minimal`, are open the same way with nothing behind them, so
-they are stated in the finding but kept out of its title.
-
-Everything else — `camera`, `payment`, `usb`, `display-capture` and the other
-thirty-six — defaults to `self`. An undeclared `camera` does **not** let an
-embedded third party reach the camera: a browser was never going to allow that,
-and the `allow` attribute on an iframe can only narrow what the parent already
-grants, never widen it.
-
-This axis is stated and not counted as a defect. What it describes is the user's
-privacy toward parties the site deliberately embedded, and for an advertising or
-analytics frame, reading the user's topics and registering attributions is the
-reason the frame is there — `browsing-topics=()` would break what the site
-installed on purpose. It earns a look in the opposite case: a frame embedded for
-something else entirely, a chat widget or a video player, that picks these
-capabilities up along the way because nothing took them away. The response cannot
-say which of the two it is.
-
-**The second axis: what an XSS on this origin can reach.** A permission prompt
-names the site, never the code that asked for it. A user looking at *"example.com
-wants to use your camera"* while using example.com has no way to tell a genuine
-request from injected script, and grants it. So the exposure does not depend on
-the origin already holding a stored grant — script that reaches execution here
-can go and ask, and one click is the whole interaction.
-
-That is true of `camera`, `microphone` and `geolocation`. It is not true of the
-features whose prompt is followed by a choice: `display-capture` makes the user
-pick what to share, `usb`, `serial`, `hid` and `bluetooth` make them pick a
-device, `payment` opens a payment flow. There the consent is informed about *what*
-and not only about *who*.
-
-Only `()` closes this axis. `(self)` authorises this origin, and an XSS runs on
-this origin — reading a declared `camera=(self)` as "handled" would be a
-reassuring falsehood. The reverse holds on the first axis, where `(self)` is
-enough because it excludes every other origin.
-
-A site that genuinely uses one of the three can still close it on every response
-that does not, since the header is per-response; the finding asks that rather than
-assuming it.
-
-**A widened feature is read from its allowlist**, not searched for in the raw
-value: `x-payment=*` is a different feature from `payment`, and `camera=(self)`
-restates the default rather than opening anything.
-
-**Sending no header at all** leaves both axes open, which is the same position as
-a policy that closes neither — so it carries the same severity, and a response
-that declares an unrelated feature does not appear to have improved its standing.
-The absent-header finding states both axes and names both sets.
-
-**On publishing a list of every feature to disable.** Advice of that shape — set
-all of them to `()` — is sound for whoever configures the site. It is a poor basis
-for a verdict, and a fixed list goes stale in the place that matters: one widely
-circulated version names `interest-cohort`, a directive for a feature its browser
-removed, and covers two of the nine any-origin directives while covering
-twenty-one of the forty that default to `self`. It is thorough on the axis that
-needs an XSS to matter and nearly silent on the axis that needs nothing else at
-all — because the any-origin APIs mostly postdate it.
 
 ---
 
