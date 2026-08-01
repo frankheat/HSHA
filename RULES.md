@@ -570,6 +570,17 @@ a question about network position, not about authentication.
 
 ---
 
+### X-DNS-Prefetch-Control
+
+**Required:** no — **Severity if missing:** INFO
+
+| Value | Severity | Rationale |
+|---|---|---|
+| `off` | OK | DNS prefetching disabled |
+| Any other value | INFO | DNS prefetching enabled — can reveal visited subdomains |
+
+---
+
 ## Headers — Extended Profile Only
 
 The following headers are checked only when using `profiles/extended.yaml`.
@@ -682,17 +693,6 @@ authenticated CORS, and there is nothing here. An earlier version
 graded it INFO on the grounds that a one-off verification should not fail a build;
 that reasoning went with the exit code, and it had the tool printing a note that
 the reader was expected to re-grade by hand.
-
----
-
-### X-DNS-Prefetch-Control
-
-**Required:** no — **Severity if missing:** INFO
-
-| Value | Severity | Rationale |
-|---|---|---|
-| `off` | OK | DNS prefetching disabled |
-| Any other value | INFO | DNS prefetching enabled — can reveal visited subdomains |
 
 ---
 

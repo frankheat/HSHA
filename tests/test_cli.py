@@ -184,6 +184,7 @@ def test_a_clean_response_says_so(response_file):
         "Cross-Origin-Resource-Policy: same-origin",
         "X-Permitted-Cross-Domain-Policies: none",
         'Clear-Site-Data: "cache", "cookies", "storage"',
+        "X-DNS-Prefetch-Control: off",
     ])
     assert 'No issues found' in run(response_file(full)).stdout
 
