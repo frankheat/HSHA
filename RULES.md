@@ -391,14 +391,14 @@ unsafe-none)"* — and so does a header sent twice, which MDN puts plainly:
 setting `unsafe-none`."* All of them are graded as an absent COEP, because that
 is what the response amounts to.
 
-**Why that severity is low, unlike the equivalent for COOP.** Not having COEP is
-not an exposure. It withdraws a capability rather than opening anything: without
-cross-origin isolation the browser refuses `SharedArrayBuffer` and unthrottled
-timers instead of allowing them over resources that never consented. A COEP that
-silently fails to apply therefore breaks a feature, not a boundary — the site
-notices, and nothing is at risk in the meantime. A COOP that silently fails to
-apply leaves a document open to being probed, which is why that one is graded far
-higher.
+**Why not having COEP is graded far below the equivalent for COOP.** Not having
+COEP is not an exposure. It withdraws a capability rather than opening anything:
+without cross-origin isolation the browser refuses `SharedArrayBuffer` and
+unthrottled timers instead of allowing them over resources that never consented.
+A COEP that silently fails to apply therefore breaks a feature, not a boundary —
+the site notices, and nothing is at risk in the meantime. A COOP that silently
+fails to apply leaves a document open to being probed by anything that opens it,
+with nothing to reveal that the protection is gone.
 
 **`credentialless` is not a weaker `require-corp`.** Both qualify a document for
 cross-origin isolation. They differ in mechanism: `require-corp` demands that
