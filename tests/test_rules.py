@@ -297,7 +297,7 @@ def test_missing_cache_control_explains_heuristic_caching():
     finding = analyze("X-Nothing: x")['cache-control'].findings[0]
     assert "heuristic caching" in finding.description
     assert "signed-in user" in finding.description
-    assert "no-store" in finding.recommendation
+    assert "no-store" in finding.verify
 
 
 def test_missing_required_header_still_gets_the_generic_fallback():

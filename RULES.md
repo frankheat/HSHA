@@ -435,52 +435,38 @@ routes to it.
 
 ### Cache-Control
 
-**Required:** no in `--context public`, yes in `--context authenticated`
-
-This is the one header whose *correct* value depends on what the response
-carries, which is why HSHA asks rather than guesses. `public, max-age=31536000`
-is right for a static asset and wrong for an account page; there is no single
-verdict that serves both.
+**Required:** yes — **Severity if missing:** MEDIUM
 
 Two audiences matter, and confusing them is where the damage comes from: the
 **browser**, which writes to the user's disk, and **shared caches** — CDNs,
 proxies, gateways — which keep one copy and hand it to whoever asks next.
 
-#### Assuming a response carrying a signed-in user's data (the default)
-
-Only `no-store` keeps such a response out of every cache.
+This is the one header whose *correct* value depends on what the response
+carries: `public, max-age=31536000` is right for a static asset and a data leak
+on an account page. HSHA grades the case where caching costs something, and every
+verdict but `no-store` carries the question that settles it — does this response
+carry data belonging to a signed-in user? On a response that carries nothing
+user-specific there is nothing here, and `no-store` would only cost bandwidth.
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `no-store` | OK | Nothing is stored anywhere |
+| `no-store` | OK | Nothing is stored anywhere, and right either way — the only verdict that needs no question |
 | `private` | LOW | Shared caches will not store it, so it cannot reach another user — but the browser still writes it to disk, where the back button after logout, or the next person on that machine, can recover it |
-| `no-cache` | MEDIUM | Forces revalidation before reuse; it does **not** prevent storage. A shared cache may keep this user's response, and nothing marks it as belonging to one user. `max-age=0` with `must-revalidate` is graded the same, being the same round trip |
-| Anything else that a shared cache may store | **HIGH** | A CDN or proxy may keep the response under this URL and serve it to the next person who asks — one user's data handed to another. Covers `max-age`, `s-maxage`, `public`, and the qualified forms `private="Field"` / `no-cache="Field"`, which cover only the fields they name |
+| `no-cache` | MEDIUM | Forces revalidation before reuse; it does **not** prevent storage. A shared cache may keep the response, and nothing marks it as belonging to one user. `max-age=0` with `must-revalidate` is graded the same, being the same round trip |
+| Anything else a shared cache may store | **HIGH** | A CDN or proxy may keep the response under this URL and serve it to the next person who asks — one user's data handed to another. Covers `max-age`, `s-maxage`, `public`, and the qualified forms `private="Field"` / `no-cache="Field"`, which cover only the fields they name |
 | Absent, or no token a cache understands | MEDIUM | With no instruction, caches fall back to heuristic freshness and may store it anyway. A value made only of unrecognised tokens says nothing either, so it is graded the same |
 
-#### Assuming a response carrying nothing user-specific (`--context public`)
+**Why the question is asked in the finding rather than answered up front.** An
+earlier version took it as a flag: the reader declared what the response carried
+and the grading followed. That put the work before the report, at a point where
+the reader may not yet know, and it produced a verdict that looked settled either
+way. Carrying the question instead states the worse case, says plainly what
+would dismiss it, and leaves the answer where the evidence is.
 
-| Value | Severity | Rationale |
-|---|---|---|
-| `no-store`, `no-cache`, `private` | OK | Conservative, and harmless here |
-| Only standard directives | OK | Ordinary caching of public content |
-| `public` | INFO | Shared caches allowed — worth confirming that is intended |
-| `no-cache="Field"`, `private="Field"` | INFO | The qualified form covers only the fields it names, so the rest of the response is served from cache; much weaker than the bare directive |
-| A token that is not a standard directive | INFO | Likely a typo or a vendor extension; caches ignore it |
-| Absent | INFO | Heuristic caching applies, which is unremarkable for public content |
-
-#### Why only this header takes the flag
-
-For nearly every other header the right value does not depend on the context —
-`nosniff` is right either way, and `unsafe-inline` is wrong either way. What
-changes is how much the mistake costs, not what the fix is. Caching is different:
-the same value is correct in one setting and a data leak in the other, so a
-single verdict would have to be wrong half the time.
-
-`Access-Control-Allow-Origin: *` looks like it belongs here and does not.
-Browsers refuse the wildcard together with credentials, so a cross-origin read of
-an authenticated response is blocked whatever this flag says. What makes the
-wildcard dangerous is whether the endpoint is reachable at all from outside —
+**`Access-Control-Allow-Origin: *` looks like it belongs in the same family and
+does not.** Browsers refuse the wildcard together with credentials, so a
+cross-origin read of an authenticated response is blocked regardless. What makes
+the wildcard dangerous is whether the endpoint is reachable at all from outside —
 a question about network position, not about authentication.
 
 ---

@@ -14,9 +14,9 @@ import json
 import sys
 from pathlib import Path
 
-from lib.config import CONTEXTS, CONTEXT_AUTHENTICATED, load_config
+from lib.config import load_config
 from lib.parser import parse_http_response
-from lib.reporter import console, report, set_context_note
+from lib.reporter import console, report
 from lib.rules import analyze_headers
 
 
@@ -43,19 +43,10 @@ def main() -> int:
         help="text: rich output (default); json: machine-readable; list: failed header names only",
     )
     parser.add_argument(
-        '--context',
-        choices=list(CONTEXTS),
-        default=CONTEXT_AUTHENTICATED,
-        help="what the response is assumed to carry (default: authenticated). "
-             "'authenticated': data belonging to a signed-in user; "
-             "'public': nothing user-specific. Only affects checks whose correct "
-             "value depends on it — caching",
-    )
-    parser.add_argument(
         '--mode', '-m',
         choices=['severity', 'simple'],
-        default='simple',
-        help="simple: pass/fail only (default); severity: risk levels per finding",
+        default='severity',
+        help="severity: risk levels per finding (default); simple: pass/fail only",
     )
     args = parser.parse_args()
 
@@ -72,7 +63,6 @@ def main() -> int:
     raw_headers = parse_http_response(content)
     try:
         config = load_config(args.config)
-        config.context = args.context
         results = analyze_headers(raw_headers, config)
     except OSError as e:
         console.print(f"[red]Error: cannot read config file '{args.config}': {e.strerror}[/red]")
@@ -80,9 +70,6 @@ def main() -> int:
     except ValueError as e:
         console.print(f"[red]Error: {e}[/red]")
         return 2
-
-    if args.format not in ('json', 'list'):
-        set_context_note(args.context)
 
     if args.format == 'json':
         output = [

@@ -11,7 +11,7 @@ A CLI tool that parses raw HTTP responses and evaluates security headers. Produc
 - Checks presence and correct configuration of security headers
 - Two built-in profiles: **basic** (12 headers) and **extended** (24 headers)
 - Three output formats: rich table (`text`), plain list (`list`), machine-readable (`json`)
-- Response context (`--context authenticated|public`) for the checks whose correct value depends on it
+- Findings the response cannot settle carry the check that would, and what each outcome means
 - Two display modes: `severity` (CRITICAL/HIGH/MEDIUM/LOW/INFO/NOTE) and `simple` (PASS/FAIL)
 - Duplicate headers resolved per header the way browsers do (first wins, last wins, join, strictest); losing a value to the resolution is a LOW finding, otherwise a NOTE — and the resolved value is then checked like any other, which is how two `Cross-Origin-Opener-Policy` headers are caught cancelling each other out
 - CSP deep analysis via built-in Python evaluator
@@ -104,27 +104,31 @@ A finding counts as an issue from LOW upwards. OK, NOTE and INFO never mark a he
 
 ---
 
-## Response Context
+## To confirm
 
-Most checks give the same verdict whatever the response carries. Caching does
-not: `Cache-Control: public, max-age=31536000` is correct for a static asset and
-a data leak on an account page. HSHA therefore asks instead of guessing.
+Some checks the response settles on its own: `max-age=300` is too short whatever
+the site does with it. Others are true statements whose weight depends on
+something a saved response cannot show — whether the page uses the camera,
+whether it embeds third-party frames, whether this endpoint returns a signed-in
+user's data.
 
-```bash
-# Default — assumes the response carries data belonging to a signed-in user
-python check_headers.py response.txt
+Those findings carry the check that settles them, and what each outcome means:
 
-# The response carries nothing user-specific
-python check_headers.py response.txt --context public
+```
+To confirm (what these are worth depends on something the response cannot say)
+
+Cache-Control
+  Value: max-age=600
+  [HIGH] Cache-Control: 'max-age=600' lets a shared cache store this response
+        ? Does this response carry data belonging to a signed-in user — anything the
+          server decided from a cookie or an Authorization header? If it does, this
+          stands. If it carries nothing user-specific, there is nothing here.
 ```
 
-The default is `authenticated` because under-reporting on a sensitive page is
-worse than the reverse: a missing finding goes unnoticed, an inapplicable one is
-obvious and fixed with a flag. The report states which assumption it was produced
-under.
-
-Only `Cache-Control` is affected; every other check gives the same verdict either
-way. [`RULES.md`](RULES.md) explains why.
+The severity is what the finding is worth **if it applies**; the `?` beside a
+header in the table says nothing settled has reached that level. The summary
+counts the two apart, and a finding carries either a check or a recommendation —
+never both, since until the check is done there is nothing to recommend.
 
 ---
 

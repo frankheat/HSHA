@@ -1,7 +1,7 @@
 """Shared helpers for the HSHA test suite."""
 from pathlib import Path
 
-from lib.config import CONTEXT_PUBLIC, AppConfig, load_config
+from lib.config import AppConfig, load_config
 from lib.models import Finding, HeaderResult, Severity
 from lib.parser import parse_http_response
 from lib.rules import analyze_headers
@@ -36,11 +36,6 @@ def severity_for(header: str, value: str, config: AppConfig | None = None) -> Se
 def has(findings: list[Finding], substring: str) -> bool:
     """True if any finding title contains `substring`."""
     return any(substring in f.title for f in findings)
-
-
-def public() -> AppConfig:
-    """Config assuming the response carries nothing specific to a signed-in user."""
-    return AppConfig(context=CONTEXT_PUBLIC)
 
 
 def profile(name: str) -> AppConfig:

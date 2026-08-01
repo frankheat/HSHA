@@ -27,20 +27,9 @@ class HeaderOverride:
     display_name: str = ""
 
 
-# What the analysed response is assumed to carry. It decides the checks whose
-# *correct* value depends on it, not merely their urgency — caching is the case:
-# `public, max-age=600` is right for a static asset and wrong for an account page.
-CONTEXT_AUTHENTICATED = 'authenticated'
-CONTEXT_PUBLIC = 'public'
-CONTEXTS = (CONTEXT_AUTHENTICATED, CONTEXT_PUBLIC)
-
-
 @dataclass
 class AppConfig:
     overrides: dict[str, HeaderOverride] = field(default_factory=dict)
-    # Assume a response carrying data specific to a signed-in user unless told
-    # otherwise: under-reporting on a sensitive page is worse than the reverse.
-    context: str = CONTEXT_AUTHENTICATED
 
 
 _KNOWN_KEYS = {

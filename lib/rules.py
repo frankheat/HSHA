@@ -5,7 +5,7 @@ Each checker returns a list[Finding] given (header_value, extra_config_dict).
 import re
 from typing import Callable, Optional
 
-from .config import CONTEXT_AUTHENTICATED, AppConfig, HeaderOverride, get_override
+from .config import AppConfig, HeaderOverride, get_override
 from .correlations import apply_correlations
 from .csp_evaluator import evaluate_csp
 from .models import Finding, HeaderResult, Severity, is_issue
@@ -27,7 +27,7 @@ SECURITY_HEADERS: list[tuple[str, str, bool, Severity]] = [
     ("cross-origin-embedder-policy",     "Cross-Origin-Embedder-Policy",     False, Severity.LOW),
     ("cross-origin-resource-policy",     "Cross-Origin-Resource-Policy",     False, Severity.LOW),
     ("x-permitted-cross-domain-policies","X-Permitted-Cross-Domain-Policies",False, Severity.LOW),
-    ("cache-control",                    "Cache-Control",                    False, Severity.INFO),
+    ("cache-control",                    "Cache-Control",                    True,  Severity.MEDIUM),
     ("clear-site-data",                  "Clear-Site-Data",                  False, Severity.INFO),
     ("x-dns-prefetch-control",           "X-DNS-Prefetch-Control",           False, Severity.INFO),
     ("origin-agent-cluster",             "Origin-Agent-Cluster",             False, Severity.INFO),
@@ -45,13 +45,6 @@ SECURITY_HEADERS: list[tuple[str, str, bool, Severity]] = [
 ]
 
 _DEFAULT_KEYS = {k for k, *_ in SECURITY_HEADERS}
-
-# Headers whose absence means something different once the response is assumed to
-# carry a signed-in user's data. Without a Cache-Control of its own such a
-# response is subject to heuristic caching, which is not a remark but a problem.
-_CONTEXT_MISSING: dict[str, dict[str, Severity]] = {
-    CONTEXT_AUTHENTICATED: {'cache-control': Severity.MEDIUM},
-}
 
 # ---------------------------------------------------------------------------
 # Duplicate-header resolution, mirroring real browser behavior:
@@ -169,21 +162,15 @@ def analyze_headers(
             continue
         occurrences = raw_headers.get(key)
 
-        context_sev = _CONTEXT_MISSING.get(config.context, {}).get(key)
-
         if override.required is not None:
             required = override.required
         elif override.severity_if_missing:
             # Setting a severity for absence states that the header is expected;
             # an explicit `required: false` still wins over that.
             required = True
-        elif context_sev is not None:
-            required = True
         else:
             required = default_required
-        missing_sev = (
-            _parse_severity(override.severity_if_missing, context_sev or default_missing_sev)
-        )
+        missing_sev = _parse_severity(override.severity_if_missing, default_missing_sev)
 
         findings: list[Finding] = []
         value: Optional[str] = None
@@ -201,9 +188,11 @@ def analyze_headers(
                     key, f"The {canonical} header is absent from the response."),
                 # A recommendation written for this header is worth showing whether or
                 # not it is required — that is where an INFO finding would otherwise
-                # say nothing useful. Only the generic fallback is held back.
-                recommendation=_MISSING_RECS.get(
-                    key, f"Add the {canonical} header." if required else ""),
+                # say nothing useful. Only the generic fallback is held back. A header
+                # whose absence is contingent carries the check instead.
+                recommendation=("" if key in _MISSING_VERIFY else _MISSING_RECS.get(
+                    key, f"Add the {canonical} header." if required else "")),
+                verify=_MISSING_VERIFY.get(key, ""),
             ))
         else:
             value, dup_note = _resolve_duplicates(key, canonical, occurrences)
@@ -219,10 +208,12 @@ def analyze_headers(
                         "entirely, so the effect is the same as not sending it at all. "
                         "An empty value usually points at a misconfigured template or proxy."
                     ),
-                    recommendation=_MISSING_RECS.get(key, f"Set a valid value for {canonical}."),
+                    recommendation=("" if key in _MISSING_VERIFY else
+                                    _MISSING_RECS.get(key, f"Set a valid value for {canonical}.")),
+                    verify=_MISSING_VERIFY.get(key, ""),
                 ))
             else:
-                findings.extend(_validate_value(key, canonical, value, override, absent_sev, config.context))
+                findings.extend(_validate_value(key, canonical, value, override, absent_sev))
 
         results.append(HeaderResult(
             name=key,
@@ -293,10 +284,6 @@ def analyze_headers(
 # whose effect is identical to sending no header at all.
 ABSENT_SEVERITY = '_absent_severity'
 
-# Reserved likewise: the assumed content of the response. Only checks whose
-# correct value depends on it read this.
-CONTEXT = '_context'
-
 
 def _validate_value(
     key: str,
@@ -304,7 +291,6 @@ def _validate_value(
     value: str,
     override: HeaderOverride,
     absent_sev: Severity = Severity.INFO,
-    context: str = CONTEXT_AUTHENTICATED,
 ) -> list[Finding]:
     # Config-level value assertions take precedence over built-in checks
     if override.expected_value:
@@ -332,7 +318,7 @@ def _validate_value(
     # Real problems found by the checker are more specific and win; otherwise the
     # config severity applies. Checkers report a clean value with an OK finding, so
     # the test is "found no issue", not "returned nothing".
-    extra = {**override.extra, ABSENT_SEVERITY: absent_sev, CONTEXT: context}
+    extra = {**override.extra, ABSENT_SEVERITY: absent_sev}
 
     if override.severity_if_present:
         checker = _CHECKERS.get(key)
@@ -987,15 +973,32 @@ _CACHE_CONTROL_DIRECTIVES = {
 }
 
 
-def _check_cache_control_authenticated(value: str, directives: dict, extra: dict) -> list[Finding]:
+# The question every non-OK caching verdict below turns on. Asked once, because
+# the answer is the same for all of them and it is not in the response.
+_CACHE_CONTROL_VERIFY = (
+    "Does this response carry data belonging to a signed-in user — anything the server "
+    "decided from a cookie or an Authorization header? If it does, this stands. If it "
+    "carries nothing user-specific, there is nothing here: storing a public resource is "
+    "what these directives are for, and no-store would only cost bandwidth."
+)
+
+
+def _check_cache_control(value: str, extra: dict) -> list[Finding]:
     """
-    Grade Cache-Control for a response carrying a signed-in user's data.
+    Graded for a response carrying a signed-in user's data, which is the case
+    where caching costs something. Whether this response is one of those is a
+    question about the endpoint, so every verdict but `no-store` carries it.
 
     Only `no-store` keeps such a response out of every cache. `private` stops the
     shared caches but leaves a copy on the user's disk; `no-cache` stops neither,
     it only forces revalidation. Anything else lets a shared cache keep the
     response and hand it to the next person who asks for the same URL.
     """
+    # Directive names have to be read as names: searching the raw value for
+    # 'no-store' also matches a token that merely contains it, and misses the
+    # difference between `no-cache` and the far weaker `no-cache="Some-Header"`.
+    directives = _parse_directives(value, ',')
+
     def bare(name: str) -> bool:
         return name in directives and not directives[name]
 
@@ -1008,9 +1011,9 @@ def _check_cache_control_authenticated(value: str, directives: dict, extra: dict
             title=f"Cache-Control: '{value}' holds no directive a cache understands",
             description="None of these tokens is a standard cache directive, so caches ignore "
                         "them and fall back to heuristic freshness — the same position as sending "
-                        "no Cache-Control at all. Nothing keeps this user's response out of a "
-                        "shared cache.",
-            recommendation="Use no-store for a response carrying a signed-in user's data.",
+                        "no Cache-Control at all. Nothing keeps this response out of a shared "
+                        "cache.",
+            verify=_CACHE_CONTROL_VERIFY,
         )]
 
     if 'no-store' in directives:
@@ -1026,7 +1029,7 @@ def _check_cache_control_authenticated(value: str, directives: dict, extra: dict
                         "another user. The browser still writes it to disk, where it can be "
                         "recovered with the back button after logout, or by whoever uses the "
                         "machine next.",
-            recommendation="Use no-store for a response carrying a signed-in user's data.",
+            verify=_CACHE_CONTROL_VERIFY,
         )]
 
     # `max-age=0` plus a revalidate directive forces the same round trip as a bare
@@ -1041,10 +1044,9 @@ def _check_cache_control_authenticated(value: str, directives: dict, extra: dict
             severity=Severity.MEDIUM,
             title=f"Cache-Control: '{value}' revalidates but does not stop a shared cache storing this",
             description="Revalidation before reuse is forced, but storage is not prevented. A "
-                        "shared cache may keep this user's response, and nothing here marks it as "
+                        "shared cache may keep the response, and nothing here marks it as "
                         "belonging to a single user.",
-            recommendation="Use no-store, or at least private, for a response carrying a "
-                           "signed-in user's data.",
+            verify=_CACHE_CONTROL_VERIFY,
         )]
 
     qualified = [n for n in ('private', 'no-cache') if directives.get(n)]
@@ -1058,86 +1060,8 @@ def _check_cache_control_authenticated(value: str, directives: dict, extra: dict
         description="Nothing here keeps the response out of a shared cache, so a CDN or proxy may "
                     "store it under this URL and serve it to the next person who asks — one user's "
                     "data handed to another." + detail,
-        recommendation="Use no-store for a response carrying a signed-in user's data.",
+        verify=_CACHE_CONTROL_VERIFY,
     )]
-
-
-def _check_cache_control(value: str, extra: dict) -> list[Finding]:
-    findings: list[Finding] = []
-    # Directive names have to be read as names: searching the raw value for
-    # 'no-store' also matches a token that merely contains it, and misses the
-    # difference between `no-cache` and the far weaker `no-cache="Some-Header"`.
-    directives = _parse_directives(value, ',')
-
-    if extra.get(CONTEXT) == CONTEXT_AUTHENTICATED:
-        return _check_cache_control_authenticated(value, directives, extra)
-
-    if 'no-store' in directives:
-        findings.append(Finding('Cache-Control', Severity.OK, "Cache-Control: no-store (sensitive data not cached)"))
-    elif 'no-cache' in directives:
-        if directives['no-cache']:
-            findings.append(Finding(
-                header='Cache-Control',
-                severity=Severity.INFO,
-                title=f"Cache-Control: no-cache is limited to '{directives['no-cache']}'",
-                description="With an argument, no-cache only covers the header fields it names: a "
-                            "cache may serve the rest of the response without revalidating it "
-                            "(RFC 9111). That is much weaker than a bare no-cache, and support "
-                            "for the qualified form varies between caches.",
-                recommendation="Use a bare no-cache, or no-store, if the whole response must not "
-                               "be served from cache unchecked.",
-            ))
-        else:
-            findings.append(Finding(
-                header='Cache-Control',
-                severity=Severity.OK,
-                title="Cache-Control: no-cache (revalidated before use)",
-                description="Content may be stored but will be revalidated with the server.",
-                recommendation="For sensitive endpoints prefer no-store.",
-            ))
-    elif 'private' in directives:
-        if directives['private']:
-            findings.append(Finding(
-                header='Cache-Control',
-                severity=Severity.INFO,
-                title=f"Cache-Control: private is limited to '{directives['private']}'",
-                description="With an argument, private only covers the header fields it names: a "
-                            "shared cache may store the rest of the response (RFC 9111). That is "
-                            "the opposite of what a bare private means, and support for the "
-                            "qualified form varies between caches.",
-                recommendation="Use a bare private, or no-store, to keep the whole response out "
-                               "of shared caches.",
-            ))
-        else:
-            findings.append(Finding(
-                header='Cache-Control',
-                severity=Severity.OK,
-                title="Cache-Control: private (shared caches must not store the response)",
-                description="Only the user's browser may cache the response; shared caches (proxies, CDNs) will not.",
-                recommendation="For highly sensitive responses prefer no-store (the browser can still cache 'private' to disk).",
-            ))
-
-    if 'public' in directives:
-        findings.append(Finding(
-            header='Cache-Control',
-            severity=Severity.INFO,
-            title="Cache-Control: public (shared caches allowed)",
-            description="Ensure public caching is intentional for this response.",
-        ))
-
-    if not findings:
-        unknown = set(directives) - _CACHE_CONTROL_DIRECTIVES
-        if unknown:
-            findings.append(Finding(
-                header='Cache-Control',
-                severity=Severity.INFO,
-                title=f"Cache-Control: unrecognized directive(s): {', '.join(sorted(unknown))}",
-                description=f"Value '{value}' contains tokens that are not standard Cache-Control directives.",
-            ))
-        else:
-            findings.append(Finding('Cache-Control', Severity.OK, f"Cache-Control: '{value}' (valid caching directives)"))
-
-    return findings
 
 
 def _check_x_permitted_cross_domain_policies(value: str, extra: dict) -> list[Finding]:
@@ -1455,9 +1379,12 @@ _MISSING_RECS: dict[str, str] = {
         "Cross-Origin-Embedder-Policy: require-corp",
     'cross-origin-resource-policy':
         "Cross-Origin-Resource-Policy: same-origin",
-    'cache-control':
-        "If this response carries data belonging to a signed-in user, send "
-        "Cache-Control: no-store.",
+}
+
+# Where the absence of a header only matters under a condition the response does
+# not state, the finding carries that check instead of a recommendation.
+_MISSING_VERIFY: dict[str, str] = {
+    'cache-control': _CACHE_CONTROL_VERIFY,
 }
 
 # Descriptions for headers whose absence needs more than "it is not there".
