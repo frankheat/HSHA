@@ -185,22 +185,25 @@ def test_a_clean_response_says_so(response_file):
         "X-Permitted-Cross-Domain-Policies: none",
         'Clear-Site-Data: "cache", "cookies", "storage"',
         "X-DNS-Prefetch-Control: off",
+        "X-XSS-Protection: 0",
     ])
     assert 'No issues found' in run(response_file(full)).stdout
 
 
-def test_extended_profile_checks_deprecated_headers(response_file):
+@pytest.mark.parametrize("profile", [[], ['-c', 'profiles/extended.yaml']])
+def test_a_deprecated_header_left_enabled_is_reported_by_both_profiles(response_file, profile):
+    """X-XSS-Protection is checked by default now: what matters about a deprecated
+    header is not that it is missing but that a site still has it switched on."""
     response = build_response(*CLEAN_HEADERS, "X-XSS-Protection: 1; mode=block")
-    data = json.loads(run(response_file(response), '-c', 'profiles/extended.yaml',
-                          '--format', 'json').stdout)
+    data = json.loads(run(response_file(response), *profile, '--format', 'json').stdout)
     xss = next(r for r in data if r['header'] == 'X-XSS-Protection')
     assert xss['severity'] == 'LOW'
 
 
-def test_basic_profile_ignores_deprecated_headers(response_file):
-    response = build_response(*CLEAN_HEADERS, "X-XSS-Protection: 1; mode=block")
+def test_expect_ct_stays_out_of_the_basic_profile(response_file):
+    response = build_response(*CLEAN_HEADERS, "Expect-CT: max-age=86400")
     data = json.loads(run(response_file(response), '--format', 'json').stdout)
-    assert not any(r['header'] == 'X-XSS-Protection' for r in data)
+    assert not any(r['header'] == 'Expect-CT' for r in data)
 
 
 # ---------------------------------------------------------------------------

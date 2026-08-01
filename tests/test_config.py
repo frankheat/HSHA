@@ -19,7 +19,7 @@ def yaml_file(tmp_path):
 
 def test_no_path_loads_the_basic_profile():
     config = load_config(None)
-    assert config.overrides['x-xss-protection'].skip is True
+    assert config.overrides['expect-ct'].skip is True
 
 
 def test_header_names_are_normalised_to_lowercase(yaml_file):

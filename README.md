@@ -9,7 +9,7 @@ A CLI tool that parses raw HTTP responses and evaluates security headers. Produc
 ## Features
 
 - Checks presence and correct configuration of security headers
-- Two built-in profiles: **basic** (13 headers) and **extended** (24 headers)
+- Two built-in profiles: **basic** (14 headers) and **extended** (24 headers)
 - Two output formats: rich table (`text`) and machine-readable (`json`)
 - Findings the response cannot settle carry the check that would, and what each outcome means
 - Duplicate headers resolved per header the way browsers do (first wins, last wins, join, strictest); losing a value to the resolution is a LOW finding, otherwise a NOTE — and the resolved value is then checked like any other, which is how two `Cross-Origin-Opener-Policy` headers are caught cancelling each other out
@@ -105,7 +105,7 @@ never both, since until the check is done there is nothing to recommend.
 The tool loads `profiles/basic.yaml` by default. Switch to the extended profile with `--config`:
 
 ```bash
-# Basic profile — 13 core headers (default)
+# Basic profile — 14 core headers (default)
 python check_headers.py response.txt
 
 # Extended profile — 24 headers including legacy, deprecated, CORS, caching
@@ -136,7 +136,7 @@ python check_headers.py response.txt --config profiles/extended.yaml
 | Service-Worker-Allowed | | ✓ |
 | Pragma / Expires / ETag | | ✓ |
 | X-Download-Options | | ✓ |
-| X-XSS-Protection *(deprecated)* | | ✓ |
+| X-XSS-Protection *(deprecated)* | ✓ | ✓ |
 | Expect-CT *(deprecated)* | | ✓ |
 
 ---

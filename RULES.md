@@ -581,6 +581,40 @@ a question about network position, not about authentication.
 
 ---
 
+### X-XSS-Protection *(deprecated)*
+
+**Required:** no — **Severity if missing:** INFO
+
+The value is a flag (`0` or `1`) optionally followed by directives, and only the
+flag decides the verdict — a digit inside a directive such as `report=1` is not
+one.
+
+| Value | Severity | Rationale |
+|---|---|---|
+| `0` (with or without trailing directives) | OK | The filter is off, which is the recommended setting; `mode=block` is irrelevant once it is |
+| `1` | LOW | Enables the filter — see below |
+| `1; mode=block` | LOW | Enables the filter in its leakiest mode — see below |
+| Any other value | INFO | Deprecated header, not doing anything risky |
+
+**Why enabling it is worse than disabling it.** The filter compared text from the
+URL against the scripts in the response and could not tell whether a matching
+script was injected or belonged to the page. Two consequences:
+
+- With `1`, an attacker could craft a URL that made the browser neutralise a
+  script the page legitimately contains — an anti-CSRF or framebusting script,
+  for example. The filter becomes a remote control for switching off a site's own
+  defences.
+- With `1; mode=block` the page is not rendered at all when the filter triggers,
+  and whether it was blocked is observable from another origin. That turns "does
+  this page contain script X?" into a yes/no answer readable cross-origin, and
+  repeating it with different scripts reveals whether the user is signed in, is
+  an administrator, and so on.
+
+Both stay LOW because no current browser honours the header: Chrome removed the
+auditor in 2019, Safari and Edge dropped theirs, and Firefox never had one.
+
+---
+
 ## Headers — Extended Profile Only
 
 The following headers are checked only when using `profiles/extended.yaml`.
@@ -760,40 +794,6 @@ the reader was expected to re-grade by hand.
 |---|---|---|
 | `noopen` | OK | Prevents IE from opening downloads in the site context |
 | Any other value | INFO | Expected value is `noopen` |
-
----
-
-### X-XSS-Protection *(deprecated)*
-
-**Required:** no — **Severity if missing:** INFO
-
-The value is a flag (`0` or `1`) optionally followed by directives, and only the
-flag decides the verdict — a digit inside a directive such as `report=1` is not
-one.
-
-| Value | Severity | Rationale |
-|---|---|---|
-| `0` (with or without trailing directives) | OK | The filter is off, which is the recommended setting; `mode=block` is irrelevant once it is |
-| `1` | LOW | Enables the filter — see below |
-| `1; mode=block` | LOW | Enables the filter in its leakiest mode — see below |
-| Any other value | INFO | Deprecated header, not doing anything risky |
-
-**Why enabling it is worse than disabling it.** The filter compared text from the
-URL against the scripts in the response and could not tell whether a matching
-script was injected or belonged to the page. Two consequences:
-
-- With `1`, an attacker could craft a URL that made the browser neutralise a
-  script the page legitimately contains — an anti-CSRF or framebusting script,
-  for example. The filter becomes a remote control for switching off a site's own
-  defences.
-- With `1; mode=block` the page is not rendered at all when the filter triggers,
-  and whether it was blocked is observable from another origin. That turns "does
-  this page contain script X?" into a yes/no answer readable cross-origin, and
-  repeating it with different scripts reveals whether the user is signed in, is
-  an administrator, and so on.
-
-Both stay LOW because no current browser honours the header: Chrome removed the
-auditor in 2019, Safari and Edge dropped theirs, and Firefox never had one.
 
 ---
 
