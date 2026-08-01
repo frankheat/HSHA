@@ -44,7 +44,7 @@ def test_clean_response_exits_zero(response_file):
 def test_a_response_with_findings_still_exits_zero(response_file):
     """A HIGH finding is a result, not a failure of the run: it belongs in the
     report the reader works from, and reporting it is the tool succeeding."""
-    result = run(response_file(NO_CSP), '--mode', 'severity')
+    result = run(response_file(NO_CSP))
     assert 'Missing Content-Security-Policy' in result.stdout
     assert result.returncode == 0
 
@@ -172,33 +172,20 @@ def test_json_severities_are_valid_names(response_file):
     assert {r['severity'] for r in data} <= valid
 
 
-def test_list_format_names_only_failed_headers(response_file):
-    out = run(response_file(NO_CSP), '--format', 'list').stdout
-    assert 'Content-Security-Policy' in out
-    assert 'X-Frame-Options' not in out          # correctly configured
+def test_text_output_shows_levels(response_file):
+    out = run(response_file(NO_CSP)).stdout
+    assert 'HIGH' in out and 'Overall' in out
 
 
-def test_list_format_is_quiet_when_everything_passes(response_file, tmp_path):
-    """With every optional header also satisfied there is nothing to list."""
+def test_a_clean_response_says_so(response_file):
+    """With every optional header also satisfied there is nothing to report."""
     full = build_response(*CLEAN_HEADERS, *[
         "Cross-Origin-Embedder-Policy: require-corp",
         "Cross-Origin-Resource-Policy: same-origin",
         "X-Permitted-Cross-Domain-Policies: none",
-        "Cache-Control: no-store",
         'Clear-Site-Data: "cache", "cookies", "storage"',
     ])
-    out = run(response_file(full), '--format', 'list').stdout
-    assert 'No issues found' in out
-
-
-def test_severity_mode_shows_levels(response_file):
-    out = run(response_file(NO_CSP), '--mode', 'severity').stdout
-    assert 'HIGH' in out and 'Overall' in out
-
-
-def test_simple_mode_shows_pass_fail(response_file):
-    out = run(response_file(NO_CSP), '--mode', 'simple').stdout
-    assert 'FAIL' in out and 'PASS' in out
+    assert 'No issues found' in run(response_file(full)).stdout
 
 
 def test_extended_profile_checks_deprecated_headers(response_file):
@@ -216,33 +203,25 @@ def test_basic_profile_ignores_deprecated_headers(response_file):
 
 
 # ---------------------------------------------------------------------------
-# One definition of "issue" across the output formats
+# Nothing is summarised away
 # ---------------------------------------------------------------------------
 
-def test_list_output_and_pass_fail_agree(response_file):
-    """The report used to say FAIL for INFO-only findings while listing nothing."""
-    for content in (CLEAN, NO_CSP):
-        path = response_file(content)
-        listed = 'No issues found' not in run(path, '--format', 'list').stdout
-        failed = 'Overall: FAIL' in run(path, '--mode', 'simple').stdout
-        assert listed == failed, content
-
-
-def test_absent_optional_header_is_informational_not_a_failure(response_file):
+def test_an_absent_optional_header_is_reported_at_its_level(response_file):
     data = json.loads(run(response_file(CLEAN), '--format', 'json').stdout)
     coep = next(r for r in data if r['header'] == 'Cross-Origin-Embedder-Policy')
     assert coep['severity'] == 'INFO'
-    assert 'Cross-Origin-Embedder-Policy' not in run(response_file(CLEAN), '--format', 'list').stdout
+    assert 'Missing Cross-Origin-Embedder-Policy' in run(response_file(CLEAN)).stdout
 
 
-def test_info_only_response_reports_pass(response_file):
-    result = run(response_file(CLEAN), '--mode', 'simple')
-    assert 'Overall: PASS' in result.stdout
-    assert 'FAIL' not in result.stdout
+def test_the_report_separates_what_is_settled_from_what_is_not(response_file):
+    """A CSP that is simply absent is settled; a caching verdict is not."""
+    out = run(response_file(NO_CSP)).stdout
+    assert 'Findings' in out and 'To confirm' in out
+    assert out.index('Missing Content-Security-Policy') < out.index('To confirm')
 
 
-def test_informational_findings_are_still_shown(response_file):
-    """Suppressed from the verdict, not from the report."""
-    out = run(response_file(CLEAN), '--mode', 'simple').stdout
-    assert 'Informational' in out
-    assert 'Missing Cross-Origin-Embedder-Policy' in out
+def test_the_removed_flags_are_gone(response_file):
+    """Pass/fail and the header-name list were verdicts the tool is not in a
+    position to reach; both were removed rather than reinterpreted."""
+    for flag in (['--mode', 'simple'], ['--format', 'list']):
+        assert run(response_file(CLEAN), *flag).returncode == 2

@@ -38,15 +38,9 @@ def main() -> int:
     )
     parser.add_argument(
         '--format', '-f',
-        choices=['text', 'json', 'list'],
+        choices=['text', 'json'],
         default='text',
-        help="text: rich output (default); json: machine-readable; list: failed header names only",
-    )
-    parser.add_argument(
-        '--mode', '-m',
-        choices=['severity', 'simple'],
-        default='severity',
-        help="severity: risk levels per finding (default); simple: pass/fail only",
+        help="text: rich output (default); json: machine-readable",
     )
     args = parser.parse_args()
 
@@ -92,10 +86,8 @@ def main() -> int:
             for r in results
         ]
         print(json.dumps(output, indent=2))
-    elif args.format == 'list':
-        report(results, mode='list')
     else:
-        report(results, mode=args.mode)
+        report(results)
 
     # The analysis ran, so the tool did its job: 0. Findings are read from the
     # report, not from the exit status — grading a response is a judgement the

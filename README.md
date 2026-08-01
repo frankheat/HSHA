@@ -10,9 +10,8 @@ A CLI tool that parses raw HTTP responses and evaluates security headers. Produc
 
 - Checks presence and correct configuration of security headers
 - Two built-in profiles: **basic** (12 headers) and **extended** (24 headers)
-- Three output formats: rich table (`text`), plain list (`list`), machine-readable (`json`)
+- Two output formats: rich table (`text`) and machine-readable (`json`)
 - Findings the response cannot settle carry the check that would, and what each outcome means
-- Two display modes: `severity` (CRITICAL/HIGH/MEDIUM/LOW/INFO/NOTE) and `simple` (PASS/FAIL)
 - Duplicate headers resolved per header the way browsers do (first wins, last wins, join, strictest); losing a value to the resolution is a LOW finding, otherwise a NOTE — and the resolved value is then checked like any other, which is how two `Cross-Origin-Opener-Policy` headers are caught cancelling each other out
 - CSP deep analysis via built-in Python evaluator
 - Fully customizable via YAML config: override severities, mark headers as required/optional, assert expected values
@@ -58,49 +57,18 @@ curl -si https://example.com | python check_headers.py -
 
 ---
 
-## Output Formats
+## Output
 
-### `--format text` (default)
+`--format text` (default) prints a table of every checked header, the findings
+grouped by whether the response settles them, and a summary.
 
-Rich color-coded table with findings detail and summary.
+`--format json` prints the same analysis machine-readably, including the `verify`
+field described below.
 
-### `--format list`
-
-Minimal output — just the names of headers with an issue, one per line:
-
-```
-The following headers are missing or misconfigured:
-
-Content-Security-Policy
-Strict-Transport-Security
-Referrer-Policy
-```
-
-Only findings of LOW or above are listed, so an optional header that is simply
-absent does not appear here — its absence is INFO. Nothing is printed when the
-response is clean.
-
-### `--format json`
-
-Machine-readable JSON, suitable for CI pipelines:
-
-```bash
-python check_headers.py response.txt --format json
-```
-
----
-
-## Display Modes
-
-### `--mode simple` (default)
-
-Shows PASS/FAIL per header with a list of issues.
-
-### `--mode severity`
-
-Shows severity level (CRITICAL / HIGH / MEDIUM / LOW / INFO / NOTE / OK) for each header and finding.
-
-A finding counts as an issue from LOW upwards. OK, NOTE and INFO never mark a header as FAIL and never appear in `--format list` — they are still printed, grouped under their own section in `--mode simple`.
+There is no pass/fail view and no list of header names. A header set is not
+something the tool is in a position to declare passed or failed: what it can do
+is rank findings by severity, say which ones it has settled, and say what would
+settle the rest.
 
 ---
 

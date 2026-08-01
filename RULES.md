@@ -16,7 +16,7 @@ This document describes every check implemented by HSHA — what triggers a find
 | **NOTE** | Informational note only (e.g. duplicate header) — never counted as a failure |
 | **OK** | Correctly configured |
 
-A finding counts as an issue from **LOW** upwards. OK, NOTE and INFO are informational: they never mark a header as FAIL and never appear in `--format list`. They are still printed, under their own section in `--mode simple` and with their level in `--mode severity`. No severity reaches the process exit status, which only reports whether the analysis could be run at all.
+Severity is what a finding is worth **if it applies to this target**. Whether it applies is a separate question, and for some checks the response cannot settle it — those carry the check that would, and what each outcome means, under a heading of their own in the report. No severity reaches the process exit status, which only reports whether the analysis could be run at all.
 
 ---
 
@@ -288,9 +288,9 @@ Whether that costs anything here depends on something the response cannot say: i
 the document opens only an OAuth or payment provider it chose, the other party is
 trusted and this is the value to use. The finding therefore carries **the check to
 run** — what does this document pass to `window.open()`? — rather than a change to
-make blindly. It is still an issue and still reaches `--format list`, because only
-`same-origin` closes both directions and the reader is the one who can settle the
-condition in a few seconds.
+make blindly. It is still graded as a weakness, because only `same-origin` closes
+both directions and the reader is the one who can settle the condition in a few
+seconds.
 
 The two differ only in a direction that does not change this. `noopener-allow-popups`
 is *stricter* about being opened than either of the others: only a same-origin

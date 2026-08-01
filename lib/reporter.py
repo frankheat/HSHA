@@ -5,29 +5,18 @@ from rich.text import Text
 from rich import box
 
 from .models import (
-    HeaderResult, Severity, is_issue,
+    HeaderResult, Severity,
     SEVERITY_COLORS, SEVERITY_LABELS, SEVERITY_SYMBOLS,
 )
 
 console = Console()
 
 
-def report(
-    results: list[HeaderResult],
-    mode: str = 'severity',   # 'severity' | 'simple'
-) -> None:
-    if mode == 'list':
-        _print_list(results)
-        return
+def report(results: list[HeaderResult]) -> None:
     _print_banner()
-    if mode == 'simple':
-        _print_table_simple(results)
-        _print_findings_simple(results)
-        _print_summary_simple(results)
-    else:
-        _print_table_severity(results)
-        _print_findings_severity(results)
-        _print_summary_severity(results)
+    _print_table(results)
+    _print_findings(results)
+    _print_summary(results)
 
 
 # ---------------------------------------------------------------------------
@@ -51,15 +40,7 @@ def _val_display(r: HeaderResult) -> str | Text:
     return r.value
 
 
-def _is_issue(r: HeaderResult) -> bool:
-    return any(is_issue(f.severity) for f in r.findings)
-
-
-# ---------------------------------------------------------------------------
-# Severity mode
-# ---------------------------------------------------------------------------
-
-def _print_table_severity(results: list[HeaderResult]):
+def _print_table(results: list[HeaderResult]):
     table = Table(box=box.ROUNDED, show_header=True, header_style="bold white", expand=False)
     table.add_column("Header", min_width=38, no_wrap=True)
     table.add_column("Severity", min_width=12, no_wrap=True)
@@ -101,7 +82,7 @@ def _print_group(title: str, subtitle: str, groups):
         console.print()
 
 
-def _print_findings_severity(results: list[HeaderResult]):
+def _print_findings(results: list[HeaderResult]):
     def group(predicate):
         pairs = [(r, [f for f in r.findings if f.severity > Severity.OK and predicate(f)])
                  for r in results]
@@ -139,7 +120,7 @@ def _tally(findings) -> str:
     return "  ".join(parts) if parts else "[green]none[/green]"
 
 
-def _print_summary_severity(results: list[HeaderResult]):
+def _print_summary(results: list[HeaderResult]):
     all_findings = [f for r in results for f in r.findings]
 
     worst = max((f.severity for f in all_findings), default=Severity.OK)
@@ -166,104 +147,3 @@ def _print_summary_severity(results: list[HeaderResult]):
         border_style=worst_color,
     ))
     console.print()
-
-
-# ---------------------------------------------------------------------------
-# Simple mode
-# ---------------------------------------------------------------------------
-
-def _print_table_simple(results: list[HeaderResult]):
-    table = Table(box=box.ROUNDED, show_header=True, header_style="bold white", expand=False)
-    table.add_column("Header", min_width=38, no_wrap=True)
-    table.add_column("Result", min_width=8, no_wrap=True)
-    table.add_column("Value", overflow="fold")
-
-    for r in results:
-        status = Text("✗ FAIL", style="red") if _is_issue(r) else Text("✓ PASS", style="green")
-        table.add_row(r.canonical_name, status, _val_display(r))
-
-    console.print(table)
-    console.print()
-
-
-def _print_findings_simple(results: list[HeaderResult]):
-    issues = [(r, [f for f in r.findings if is_issue(f.severity)]) for r in results]
-    issues = [(r, fs) for r, fs in issues if fs]
-    notes = [(r, [f for f in r.findings
-                  if Severity.OK < f.severity and not is_issue(f.severity)]) for r in results]
-    notes = [(r, fs) for r, fs in notes if fs]
-
-    if not issues and not notes:
-        console.print("[green]No issues found.[/green]")
-        console.print()
-        return
-
-    if issues:
-        console.print("[bold]Issues[/bold]")
-        console.print()
-
-        for result, findings in issues:
-            console.print(f"[bold underline]{result.canonical_name}[/bold underline]")
-            if result.value:
-                console.print(f"  [dim]Value:[/dim] {result.value}")
-
-            for f in findings:
-                console.print(f"  [red]✗[/red] {f.title}")
-                if f.description:
-                    console.print(f"      [dim]{f.description}[/dim]")
-                if f.recommendation:
-                    console.print(f"      [italic]→ {f.recommendation}[/italic]")
-
-            console.print()
-
-    if notes:
-        console.print("[bold]Informational[/bold] [dim](not counted as failures)[/dim]")
-        console.print()
-
-        for result, findings in notes:
-            console.print(f"[bold underline]{result.canonical_name}[/bold underline]")
-            if result.value:
-                console.print(f"  [dim]Value:[/dim] {result.value}")
-
-            for f in findings:
-                console.print(f"  [blue]•[/blue] {f.title}")
-                if f.description:
-                    console.print(f"      [dim]{f.description}[/dim]")
-                if f.recommendation:
-                    console.print(f"      [italic]→ {f.recommendation}[/italic]")
-
-            console.print()
-
-
-def _print_summary_simple(results: list[HeaderResult]):
-    total = len(results)
-    failed = sum(1 for r in results if _is_issue(r))
-    passed = total - failed
-    missing = sum(1 for r in results if not r.is_present)
-
-    if failed == 0:
-        color, label = "green", "PASS"
-    else:
-        color, label = "red", "FAIL"
-
-    body = (
-        f"[bold]Checked:[/bold] {total}   "
-        f"[bold]Present:[/bold] [green]{total - missing}[/green]   "
-        f"[bold]Missing:[/bold] [red]{missing}[/red]\n"
-        f"[bold]Passed:[/bold]  [green]{passed}[/green]   "
-        f"[bold]Failed:[/bold]  [red]{failed}[/red]"
-    )
-
-    console.print(Panel(body, title=f"[{color}]Overall: {label}[/{color}]", border_style=color))
-    console.print()
-
-
-def _print_list(results: list[HeaderResult]):
-    failed = [r for r in results if _is_issue(r)]
-    if not failed:
-        console.print("[green]No issues found.[/green]")
-        return
-    console.print("The following headers are missing or misconfigured:")
-    console.print()
-    for r in failed:
-        console.print(r.canonical_name)

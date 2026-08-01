@@ -15,11 +15,12 @@ class Severity(IntEnum):
 
 def is_issue(severity: Severity) -> bool:
     """
-    Whether a finding counts as a failure.
+    Whether a finding says something specific enough to stand on its own.
 
-    INFO and below are informational: they never mark a header as failed and
-    never appear in `--format list`. Every output format goes through this
-    function, so they cannot drift apart.
+    The report ranks by severity and does not use this. Its one caller is the
+    `severity_if_present` escape hatch: a profile that flags a header as unwanted
+    yields to the built-in checker when the checker found a real problem, and
+    INFO and below do not count as one.
     """
     return severity > Severity.INFO
 
