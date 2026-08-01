@@ -505,7 +505,8 @@ The following headers are checked only when using `profiles/extended.yaml`.
 
 ### Permissions-Policy
 
-**Required:** yes — **Severity if missing:** MEDIUM
+**Required:** yes — **Severity if missing:** LOW *(the same state a policy that
+closes none of the any-origin features leaves — see below)*
 
 | Condition | Severity | Rationale |
 |---|---|---|
@@ -542,6 +543,15 @@ carries the check to run.
 **A widened feature is read from its allowlist**, not searched for in the raw
 value: `x-payment=*` is a different feature from `payment`, and `camera=(self)`
 restates the default rather than opening anything.
+
+**Sending no header at all** leaves every feature at its default, which is the
+same position as a policy that names none of the any-origin nine — so it carries
+the same severity. A response that adds `camera=()` and nothing else has changed
+nothing for anything embedded in the page, and must not appear to have improved
+its standing; what it gained is the hardening, which is worth having and is not a
+boundary. The absent-header finding therefore names the nine and asks the same
+question, rather than recommending the four features a browser was already
+keeping to this origin.
 
 **On publishing a list of every feature to disable.** Advice of that shape — set
 all of them to `()` — is sound for whoever configures the site, and costs

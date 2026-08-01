@@ -19,7 +19,7 @@ def test_all_registry_headers_are_reported_when_nothing_is_skipped():
     ("X-Frame-Options", Severity.HIGH),
     ("X-Content-Type-Options", Severity.MEDIUM),
     ("Cross-Origin-Opener-Policy", Severity.MEDIUM),
-    ("Permissions-Policy", Severity.MEDIUM),
+    ("Permissions-Policy", Severity.LOW),
     ("Referrer-Policy", Severity.MEDIUM),
 ])
 def test_missing_required_header_uses_its_default_severity(header, expected):

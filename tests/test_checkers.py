@@ -228,6 +228,25 @@ def test_permissions_policy_every_any_origin_feature_is_reported_when_left_out(f
     assert issues[0].title.endswith(feature)
 
 
+def test_permissions_policy_absent_matches_a_policy_that_closes_nothing():
+    """No header and a policy naming none of the any-origin features leave the same
+    state, so a site that adds camera=() must not appear to have improved anything
+    for a third party — the only thing it gained is hardening against its own XSS."""
+    absent = analyze("X-Nothing: x")['permissions-policy']
+    minimal = findings_for("Permissions-Policy", "camera=()")
+    assert absent.worst_severity == max(f.severity for f in minimal)
+    assert 'browsing-topics' in absent.findings[0].description
+    assert absent.findings[0].recommendation.startswith("Check")
+
+
+def test_permissions_policy_absent_does_not_recommend_the_hardening_half():
+    """camera=() and friends close features nothing embedded could reach anyway;
+    naming them here would point the reader at the wrong half of the header."""
+    absent = analyze("X-Nothing: x")['permissions-policy']
+    assert 'camera=()' not in absent.findings[0].recommendation
+    assert 'storage-access=()' in absent.findings[0].recommendation
+
+
 def test_permissions_policy_does_not_ask_for_a_directive_that_was_dropped():
     """document-domain is no longer in the directive set, so recommending it would
     tell the reader to add something a browser ignores."""

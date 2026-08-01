@@ -20,7 +20,9 @@ SECURITY_HEADERS: list[tuple[str, str, bool, Severity]] = [
     ("x-frame-options",                  "X-Frame-Options",                  True,  Severity.HIGH),
     ("x-content-type-options",           "X-Content-Type-Options",           True,  Severity.MEDIUM),
     ("cross-origin-opener-policy",       "Cross-Origin-Opener-Policy",       True,  Severity.MEDIUM),
-    ("permissions-policy",               "Permissions-Policy",               True,  Severity.MEDIUM),
+    # Absence leaves the same state a policy that names none of the any-origin
+    # features leaves, and is graded the same — see _MISSING_DESCRIPTIONS.
+    ("permissions-policy",               "Permissions-Policy",               True,  Severity.LOW),
     ("referrer-policy",                  "Referrer-Policy",                  True,  Severity.MEDIUM),
     ("cross-origin-embedder-policy",     "Cross-Origin-Embedder-Policy",     False, Severity.LOW),
     ("cross-origin-resource-policy",     "Cross-Origin-Resource-Policy",     False, Severity.LOW),
@@ -1387,7 +1389,9 @@ _MISSING_RECS: dict[str, str] = {
     'cross-origin-opener-policy':
         "Cross-Origin-Opener-Policy: same-origin",
     'permissions-policy':
-        "Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()",
+        "Check whether this page embeds cross-origin iframes. If it does, closing the "
+        "features a browser leaves open to them costs nothing: "
+        + ", ".join(f + '=()' for f in sorted(_PP_DEFAULT_ANY_ORIGIN)),
     'referrer-policy':
         "Referrer-Policy: strict-origin-when-cross-origin",
     'cross-origin-embedder-policy':
@@ -1414,4 +1418,13 @@ _MISSING_DESCRIPTIONS: dict[str, str] = {
         "static asset. It is a problem for a response carrying a signed-in user's data, "
         "which can then be read from the cache after logout or by the next person to use "
         "a shared machine.",
+    'permissions-policy':
+        "Every feature stays at the allowlist a browser applies by default. For most of "
+        "them that is this origin alone, so nothing embedded in the page gains anything "
+        "from the header being absent. The exception is the "
+        f"{len(_PP_DEFAULT_ANY_ORIGIN)} features a browser allows to every origin — "
+        f"{', '.join(sorted(_PP_DEFAULT_ANY_ORIGIN))} — which a cross-origin document "
+        "embedded here can use until a policy says otherwise. What is lost besides is the "
+        "hardening: with no policy, script that achieves execution on this origin keeps "
+        "every capability the user has already granted the site.",
 }
