@@ -199,13 +199,27 @@ def _issues(value):
     return [f for f in findings_for("Permissions-Policy", value) if is_issue(f.severity)]
 
 
+def _pp(value, axis):
+    return [f for f in findings_for("Permissions-Policy", value) if axis in f.title]
+
+
 def test_permissions_policy_is_graded_on_two_separate_axes():
     """One finding for what an embedded document can reach, one for what an XSS on
     this origin can reach. They answer different questions and close differently."""
-    titles = [f.title for f in _issues("payment=()")]
-    assert len(titles) == 2
+    titles = [f.title for f in findings_for("Permissions-Policy", "payment=()")]
     assert any("available to any embedded document" in t for t in titles)
     assert any("an XSS on this origin" in t for t in titles)
+
+
+def test_permissions_policy_only_the_xss_axis_reaches_the_worklist():
+    """What an ad or analytics frame can measure is the user's privacy toward a
+    party the site chose to embed — often the very thing the frame is there for.
+    The XSS axis is an exposure of the application, and is graded as one."""
+    issues = _issues("payment=()")
+    assert len(issues) == 1
+    assert "an XSS on this origin" in issues[0].title
+    embed = _pp("payment=()", "available to any embedded document")
+    assert embed and embed[0].severity == Severity.INFO
 
 
 @pytest.mark.parametrize("feature", ['camera', 'microphone', 'geolocation'])
@@ -222,28 +236,28 @@ def test_permissions_policy_self_does_close_a_feature_to_an_embed():
     """The other axis works the other way round: (self) excludes every other origin,
     so an embedded document is already shut out."""
     at_self = ", ".join(f"{f}=(self)" for f in PP_TRACKING)
-    assert not any("embedded document" in f.title for f in _issues(at_self))
+    assert not _pp(at_self, "embedded document")
 
 
 @pytest.mark.parametrize("feature", PP_TRACKING)
 def test_permissions_policy_every_tracking_feature_is_reported_when_left_open(feature):
     left_out = ", ".join(f"{f}=()" for f in PP_TRACKING if f != feature)
-    embed_issues = [f for f in _issues(left_out) if "embedded document" in f.title]
-    assert len(embed_issues) == 1
-    assert embed_issues[0].title.endswith(feature)
+    embed = _pp(left_out, "embedded document")
+    assert len(embed) == 1
+    assert embed[0].title.endswith(feature)
 
 
 def test_permissions_policy_does_not_dilute_the_embed_finding():
     """gamepad, picture-in-picture and deferred-fetch-minimal are open the same way
     and carry nothing worth reporting; naming them in the title buries the six."""
-    embed = [f for f in _issues("payment=()") if "embedded document" in f.title][0]
+    embed = _pp("payment=()", "embedded document")[0]
     for noise in ('gamepad', 'picture-in-picture', 'deferred-fetch-minimal'):
         assert noise not in embed.title
         assert noise in embed.description      # accounted for, not silently dropped
 
 
 def test_permissions_policy_both_findings_name_a_check():
-    for finding in _issues("payment=()"):
+    for finding in findings_for("Permissions-Policy", "payment=()"):
         assert finding.recommendation.startswith("Check")
 
 

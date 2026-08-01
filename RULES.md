@@ -511,7 +511,7 @@ closes none of the any-origin features leaves — see below)*
 | Condition | Severity | Rationale |
 |---|---|---|
 | A feature whose default is this origin only, widened to `*` | MEDIUM | The policy is granting access rather than restricting it: any embedded document gains a capability a browser was withholding |
-| A tracking feature still reachable by an embedded document | LOW | A browser allows these to every origin, so anything the page embeds has them until the policy says otherwise |
+| A tracking feature still reachable by an embedded document | INFO | The user's privacy toward a party the site chose to embed — often what that party was embedded to do |
 | `camera`, `microphone` or `geolocation` not set to `()` | LOW | Script that achieves execution here can raise their permission prompt, and the prompt names the site rather than the code that asked |
 
 **Two questions, asked separately.** The header answers one thing for documents
@@ -535,9 +535,14 @@ embedded third party reach the camera: a browser was never going to allow that,
 and the `allow` attribute on an iframe can only narrow what the parent already
 grants, never widen it.
 
-Whether this axis costs anything depends on whether the page embeds cross-origin
-documents at all, which the response does not say, so the finding carries the
-check to run.
+This axis is stated and not counted as a defect. What it describes is the user's
+privacy toward parties the site deliberately embedded, and for an advertising or
+analytics frame, reading the user's topics and registering attributions is the
+reason the frame is there — `browsing-topics=()` would break what the site
+installed on purpose. It earns a look in the opposite case: a frame embedded for
+something else entirely, a chat widget or a video player, that picks these
+capabilities up along the way because nothing took them away. The response cannot
+say which of the two it is, so the finding carries that question.
 
 **The second axis: what an XSS on this origin can reach.** A permission prompt
 names the site, never the code that asked for it. A user looking at *"example.com

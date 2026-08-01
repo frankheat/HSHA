@@ -855,7 +855,7 @@ def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:
     if reaches_embeds:
         findings.append(Finding(
             header='Permissions-Policy',
-            severity=Severity.LOW,
+            severity=Severity.INFO,
             title=f"Permissions-Policy: available to any embedded document: {', '.join(reaches_embeds)}",
             description="A browser allows these to every origin, so any cross-origin document "
                         "this page embeds can use them until the policy says otherwise: reading "
@@ -863,10 +863,16 @@ def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:
                         "hints, registering ad attributions, issuing and redeeming tracking "
                         "tokens, requesting its own third-party cookies. (gamepad, "
                         "picture-in-picture and deferred-fetch-minimal are open the same way, "
-                        "with nothing worth reporting behind them.) Closing them to an embed "
-                        "takes (self); () also takes them from this origin.",
-            recommendation="Check whether this page embeds cross-origin iframes. If it does, "
-                           f"closing these costs nothing: {', '.join(f + '=()' for f in reaches_embeds)}",
+                        "with nothing worth reporting behind them.) This is the user's privacy "
+                        "toward parties the site chose to embed, and for an advertising or "
+                        "analytics frame it is what the frame was embedded to do — which is why "
+                        "it is stated rather than counted as a defect. It is worth a look when "
+                        "the embed is there for something else entirely and picks these up "
+                        "along the way. Closing them to an embed takes (self); () also takes "
+                        "them from this origin.",
+            recommendation="Check what this page embeds. For a frame that is not there to "
+                           "measure or target, closing these costs nothing: "
+                           f"{', '.join(f + '=()' for f in reaches_embeds)}",
         ))
 
     one_click = [f for f in _PP_ONE_CLICK if _pp_reaches_this_origin(f, declared)]
