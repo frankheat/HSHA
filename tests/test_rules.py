@@ -305,3 +305,29 @@ def test_missing_required_header_still_gets_the_generic_fallback():
     config = AppConfig(overrides={'x-dns-prefetch-control': HeaderOverride(required=True)})
     finding = analyze("X-Nothing: x", config=config)['x-dns-prefetch-control'].findings[0]
     assert finding.recommendation == "Add the X-DNS-Prefetch-Control header."
+
+
+# ---------------------------------------------------------------------------
+# Headers a site is meant not to send
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("header", ["X-XSS-Protection", "Expect-CT"])
+def test_a_deprecated_header_is_not_reported_as_missing(header):
+    """Absence is the correct state for both, so "Missing" would name a
+    deficiency on every clean response. What these checks are for is the sites
+    that still send them."""
+    result = analyze("X-Nothing: x")[header.lower()]
+    assert result.findings == []
+    assert result.worst_severity == Severity.OK
+
+
+@pytest.mark.parametrize("header", ["X-XSS-Protection", "Expect-CT"])
+def test_an_empty_deprecated_header_lands_in_the_same_place(header):
+    """Browsers ignore an empty header, so it is the same state as absence — and
+    for these two that state is the right one."""
+    assert result_for(header, "").findings == []
+
+
+def test_a_deprecated_header_that_is_sent_is_still_reported():
+    assert severity_for("X-XSS-Protection", "1; mode=block") == Severity.LOW
+    assert severity_for("Expect-CT", "max-age=86400") == Severity.INFO

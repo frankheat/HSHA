@@ -32,15 +32,20 @@ These checks apply to every header before any value-specific logic runs.
 |---|---|---|
 | Header absent + required | Per-header default | Missing required security header |
 | Header absent + optional | INFO | Absent but not mandatory in current profile |
+| Header absent + deprecated | OK | `X-XSS-Protection` and `Expect-CT` are meant not to be sent, so nothing is reported — see their sections |
 | Header present, value is empty | Same as absent | Browsers ignore a header with no value, so the impact is identical to not sending it. Reported under its own title because an empty value usually means a misconfigured template or proxy |
 | Header sent more than once, values combine | **NOTE** | Nothing is lost: the occurrences merge, or they were identical to begin with |
 | Header sent more than once, one value discarded | **LOW** | A misconfiguration — see below |
 
-An optional header that is absent is reported at INFO, so it never fails a build.
-Where a specific recommendation exists for that header it is shown anyway — that
-is precisely where the finding would otherwise say nothing beyond repeating its
-own title. Marking such a header `required: true` in a profile switches it to the
-per-header severity in the tables below.
+An optional header that is absent is reported at INFO. Where a specific
+recommendation exists for that header it is shown anyway — that is precisely
+where the finding would otherwise say nothing beyond repeating its own title.
+Marking such a header `required: true` in a profile switches it to the per-header
+severity in the tables below.
+
+Two headers are exempt because absence is what they want: reporting a deprecated
+header as *missing* would name a deficiency on every correctly configured
+response. Those checks exist for the sites that still send them.
 
 ### Duplicate headers
 
@@ -583,7 +588,7 @@ a question about network position, not about authentication.
 
 ### X-XSS-Protection *(deprecated)*
 
-**Required:** no — **Severity if missing:** INFO
+**Required:** no — **Absent:** OK *(not sending it is the correct state)*
 
 The value is a flag (`0` or `1`) optionally followed by directives, and only the
 flag decides the verdict — a digit inside a directive such as `report=1` is not
@@ -799,7 +804,7 @@ the reader was expected to re-grade by hand.
 
 ### Expect-CT *(deprecated)*
 
-**Required:** no — **Severity if missing:** INFO
+**Required:** no — **Absent:** OK *(not sending it is the correct state)*
 
 | Condition | Severity | Rationale |
 |---|---|---|

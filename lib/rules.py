@@ -46,6 +46,12 @@ SECURITY_HEADERS: list[tuple[str, str, bool, Severity]] = [
 
 _DEFAULT_KEYS = {k for k, *_ in SECURITY_HEADERS}
 
+# Headers a site is meant not to send at all: both are deprecated, and the filter
+# one of them enables was itself a vulnerability. Reporting them as "missing"
+# would name a deficiency on every correctly configured response — what these
+# checks are for is catching the sites that still send them.
+_ABSENCE_IS_CORRECT = {'x-xss-protection', 'expect-ct'}
+
 # ---------------------------------------------------------------------------
 # Duplicate-header resolution, mirroring real browser behavior:
 #   first     — first occurrence wins (default; e.g. HSTS per RFC 6797 §8.1)
@@ -180,6 +186,10 @@ def analyze_headers(
         absent_sev = missing_sev if required else Severity.INFO
 
         if occurrences is None:
+            if key in _ABSENCE_IS_CORRECT:
+                results.append(HeaderResult(name=key, canonical_name=canonical,
+                                            value=None, findings=[]))
+                continue
             findings.append(Finding(
                 header=canonical,
                 severity=absent_sev,
@@ -198,7 +208,9 @@ def analyze_headers(
             value, dup_note = _resolve_duplicates(key, canonical, occurrences)
             if dup_note:
                 findings.append(dup_note)
-            if value.strip() == '':
+            if value.strip() == '' and key in _ABSENCE_IS_CORRECT:
+                pass    # ignored by browsers, which is the state this header wants
+            elif value.strip() == '':
                 findings.append(Finding(
                     header=canonical,
                     severity=absent_sev,
