@@ -32,7 +32,7 @@ These checks apply to every header before any value-specific logic runs.
 |---|---|---|
 | Header absent + required | Per-header default | Missing required security header |
 | Header absent + optional | INFO | Absent but not mandatory in current profile |
-| Header absent + deprecated | OK | `X-XSS-Protection` and `Expect-CT` are meant not to be sent, so nothing is reported — see their sections |
+| Header absent, and absence is the right state | OK | `X-XSS-Protection` and `Expect-CT` are not to be sent at all; no CORS headers means same-origin only. Nothing is reported — see their sections |
 | Header present, value is empty | Same as absent | Browsers ignore a header with no value, so the impact is identical to not sending it. Reported under its own title because an empty value usually means a misconfigured template or proxy |
 | Header sent more than once, values combine | **NOTE** | Nothing is lost: the occurrences merge, or they were identical to begin with |
 | Header sent more than once, one value discarded | **LOW** | A misconfiguration — see below |
@@ -43,9 +43,13 @@ where the finding would otherwise say nothing beyond repeating its own title.
 Marking such a header `required: true` in a profile switches it to the per-header
 severity in the tables below.
 
-Two headers are exempt because absence is what they want: reporting a deprecated
-header as *missing* would name a deficiency on every correctly configured
-response. Those checks exist for the sites that still send them.
+Four headers are exempt because absence is the state to be in. Two are
+deprecated and should not be sent at all. The other two are the CORS pair: with
+neither of them the response is readable only same-origin, which is the secure
+default — a response that needed CORS and lacks it is broken, not exposed.
+Reporting any of the four as *missing* would name a deficiency on every correctly
+configured response, and those checks exist for the responses that do send
+them.
 
 ### Duplicate headers
 
@@ -588,7 +592,7 @@ a question about network position, not about authentication.
 
 ### Access-Control-Allow-Origin
 
-**Required:** no — **Severity if missing:** INFO *(absent = same-origin only, which is secure by default)*
+**Required:** no — **Absent:** OK *(no CORS headers means same-origin only, which is the secure default)*
 
 | Value | Severity | Rationale |
 |---|---|---|
@@ -650,7 +654,7 @@ can expose authenticated data, which is why it is reported as the more severe.
 
 ### Access-Control-Allow-Credentials
 
-**Required:** no — **Severity if missing:** INFO
+**Required:** no — **Absent:** OK *(nothing to send, so nothing to grade)*
 
 `true` means "send the cookies", which says nothing on its own — it matters who
 receives them. This header is therefore graded against

@@ -46,11 +46,17 @@ SECURITY_HEADERS: list[tuple[str, str, bool, Severity]] = [
 
 _DEFAULT_KEYS = {k for k, *_ in SECURITY_HEADERS}
 
-# Headers a site is meant not to send at all: both are deprecated, and the filter
-# one of them enables was itself a vulnerability. Reporting them as "missing"
-# would name a deficiency on every correctly configured response — what these
-# checks are for is catching the sites that still send them.
-_ABSENCE_IS_CORRECT = {'x-xss-protection', 'expect-ct'}
+# Headers whose absence is the state to be in, so "Missing" would name a
+# deficiency on every correctly configured response. These checks exist for the
+# responses that do send them.
+_ABSENCE_IS_CORRECT = {
+    # Deprecated: not to be sent at all, and the filter one of them enables was
+    # itself a vulnerability.
+    'x-xss-protection', 'expect-ct',
+    # No CORS headers means same-origin only, which is the secure default. A
+    # response that needed them and lacks them is broken, not exposed.
+    'access-control-allow-origin', 'access-control-allow-credentials',
+}
 
 # ---------------------------------------------------------------------------
 # Duplicate-header resolution, mirroring real browser behavior:

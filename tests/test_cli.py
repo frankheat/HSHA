@@ -186,8 +186,6 @@ def test_a_clean_response_says_so(response_file):
         'Clear-Site-Data: "cache", "cookies", "storage"',
         "X-DNS-Prefetch-Control: off",
         "X-XSS-Protection: 0",
-        "Access-Control-Allow-Origin: https://trusted.example.com",
-        "Access-Control-Allow-Credentials: false",
     ])
     assert 'No issues found' in run(response_file(full)).stdout
 

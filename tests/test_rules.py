@@ -312,23 +312,29 @@ def test_missing_required_header_still_gets_the_generic_fallback():
 # Headers a site is meant not to send
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("header", ["X-XSS-Protection", "Expect-CT"])
-def test_a_deprecated_header_is_not_reported_as_missing(header):
-    """Absence is the correct state for both, so "Missing" would name a
-    deficiency on every clean response. What these checks are for is the sites
-    that still send them."""
+ABSENCE_IS_CORRECT = ["X-XSS-Protection", "Expect-CT",
+                      "Access-Control-Allow-Origin", "Access-Control-Allow-Credentials"]
+
+
+@pytest.mark.parametrize("header", ABSENCE_IS_CORRECT)
+def test_a_header_that_should_not_be_sent_is_not_reported_as_missing(header):
+    """The deprecated pair is not to be sent at all; no CORS headers means
+    same-origin only, which is the secure default. "Missing" would name a
+    deficiency on every clean response — these checks exist for the responses
+    that do send them."""
     result = analyze("X-Nothing: x")[header.lower()]
     assert result.findings == []
     assert result.worst_severity == Severity.OK
 
 
-@pytest.mark.parametrize("header", ["X-XSS-Protection", "Expect-CT"])
-def test_an_empty_deprecated_header_lands_in_the_same_place(header):
+@pytest.mark.parametrize("header", ABSENCE_IS_CORRECT)
+def test_an_empty_one_lands_in_the_same_place(header):
     """Browsers ignore an empty header, so it is the same state as absence — and
     for these two that state is the right one."""
     assert result_for(header, "").findings == []
 
 
-def test_a_deprecated_header_that_is_sent_is_still_reported():
+def test_one_that_is_sent_is_still_reported():
     assert severity_for("X-XSS-Protection", "1; mode=block") == Severity.LOW
     assert severity_for("Expect-CT", "max-age=86400") == Severity.INFO
+    assert severity_for("Access-Control-Allow-Origin", "null") == Severity.HIGH

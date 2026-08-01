@@ -90,10 +90,11 @@ def test_nothing_is_reported_unless_credentials_are_enabled(credentials):
     assert result.worst_severity == Severity.OK
 
 
-def test_nothing_is_reported_when_the_header_is_absent():
+def test_nothing_is_reported_when_the_credentials_header_is_absent():
+    """Even next to the worst possible origin: with no credentials header there is
+    nothing to send, so the rule has no verdict to reach."""
     results = analyze(f"{ACAO}: null")
-    assert results['access-control-allow-credentials'].worst_severity == Severity.INFO
-    assert has(results['access-control-allow-credentials'].findings, "Missing")
+    assert results['access-control-allow-credentials'].findings == []
 
 
 def test_case_and_padding_are_tolerated():
