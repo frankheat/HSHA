@@ -775,6 +775,23 @@ _PP_DEFAULT_SELF = {
     'xr-spatial-tracking',
 }
 
+# The any-origin features worth naming: what an embedded document gains from them
+# is tracking and fingerprinting surface. The other three in that group — gamepad,
+# picture-in-picture, deferred-fetch-minimal — are in the same position with no
+# consequence worth reporting, and listing them only dilutes the ones that matter.
+_PP_TRACKING = {
+    'attribution-reporting', 'browsing-topics', 'ch-ua-high-entropy-values',
+    'private-state-token-issuance', 'private-state-token-redemption', 'storage-access',
+}
+
+# Features an XSS turns into access with a single click. A permission prompt names
+# the site, never the code that asked, so a user with no way to tell the two apart
+# grants it to whoever is running. What rules the others out is not the prompt but
+# the choice after it: display-capture makes the user pick what to share, usb,
+# serial, hid and bluetooth make them pick a device, payment opens a payment flow.
+# For these three, "Allow" is the whole interaction.
+_PP_ONE_CLICK = ('camera', 'microphone', 'geolocation')
+
 
 def _parse_pp_features(value: str) -> dict[str, str]:
     """Map each declared feature to its allowlist, e.g. {'camera': '()'}."""
@@ -792,6 +809,24 @@ def _pp_allowlist_origins(allowlist: str) -> list[str]:
     if a.startswith('(') and a.endswith(')'):
         a = a[1:-1]
     return [token.strip().strip('"') for token in a.split() if token.strip()]
+
+
+def _pp_effective(feature: str, declared: dict[str, str]) -> list[str]:
+    """The origins a feature ends up allowed to, declared or not."""
+    if feature in declared:
+        return _pp_allowlist_origins(declared[feature])
+    return ['*'] if feature in _PP_DEFAULT_ANY_ORIGIN else ['self']
+
+
+def _pp_reaches_an_embed(feature: str, declared: dict[str, str]) -> bool:
+    """Whether a cross-origin document embedded in the page can use the feature.
+    `(self)` closes that door; only `()` also closes it to this origin."""
+    return any(origin != 'self' for origin in _pp_effective(feature, declared))
+
+
+def _pp_reaches_this_origin(feature: str, declared: dict[str, str]) -> bool:
+    """Whether script running on this origin — an XSS included — can use it."""
+    return bool(_pp_effective(feature, declared))
 
 
 def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:
@@ -816,30 +851,40 @@ def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:
                            "genuinely needs them.",
         ))
 
-    left_open = sorted(_PP_DEFAULT_ANY_ORIGIN - set(declared))
-    if left_open:
+    reaches_embeds = sorted(f for f in _PP_TRACKING if _pp_reaches_an_embed(f, declared))
+    if reaches_embeds:
         findings.append(Finding(
             header='Permissions-Policy',
             severity=Severity.LOW,
-            title=f"Permissions-Policy: left available to any embedded origin: {', '.join(left_open)}",
-            description="These are the features a browser allows to every origin by default, "
-                        "so a cross-origin document embedded in this page can use them unless "
-                        "the policy says otherwise — mostly tracking and fingerprinting "
-                        "surface. The policy addresses other features but not these.",
+            title=f"Permissions-Policy: available to any embedded document: {', '.join(reaches_embeds)}",
+            description="A browser allows these to every origin, so any cross-origin document "
+                        "this page embeds can use them until the policy says otherwise: reading "
+                        "the user's inferred interest topics, asking for high-entropy user-agent "
+                        "hints, registering ad attributions, issuing and redeeming tracking "
+                        "tokens, requesting its own third-party cookies. (gamepad, "
+                        "picture-in-picture and deferred-fetch-minimal are open the same way, "
+                        "with nothing worth reporting behind them.) Closing them to an embed "
+                        "takes (self); () also takes them from this origin.",
             recommendation="Check whether this page embeds cross-origin iframes. If it does, "
-                           f"restricting them costs nothing: {', '.join(f + '=()' for f in left_open)}",
+                           f"closing these costs nothing: {', '.join(f + '=()' for f in reaches_embeds)}",
         ))
 
-    undeclared_self = _PP_DEFAULT_SELF - set(declared)
-    if undeclared_self:
+    one_click = [f for f in _PP_ONE_CLICK if _pp_reaches_this_origin(f, declared)]
+    if one_click:
         findings.append(Finding(
             header='Permissions-Policy',
-            severity=Severity.INFO,
-            title=f"Permissions-Policy: {len(undeclared_self)} features left at their default of this origin only",
-            description="A browser already allows these to this origin alone, so an embedded "
-                        "third party cannot use them whether or not the policy names them. "
-                        "Declaring them is hardening against script that already runs here, "
-                        "not a boundary against anyone else.",
+            severity=Severity.LOW,
+            title=f"Permissions-Policy: an XSS on this origin could ask for {', '.join(one_click)}",
+            description="Nothing embedded cross-origin can reach these — a browser keeps them "
+                        "to this origin either way. What is left open is script that achieves "
+                        "execution here: it can raise the permission prompt, and the prompt "
+                        "names the site, never the code that asked, so a user who has no way "
+                        "to tell the two apart grants it. One click is the whole interaction. "
+                        "Disabling them removes the prompt itself; (self) does not, because "
+                        "an XSS runs on this origin.",
+            recommendation="Check whether this response needs them. If it does not: "
+                           f"{', '.join(f + '=()' for f in one_click)} — a site that uses them "
+                           "on one page can still close them on every other response.",
         ))
 
     if not findings:
@@ -1389,9 +1434,8 @@ _MISSING_RECS: dict[str, str] = {
     'cross-origin-opener-policy':
         "Cross-Origin-Opener-Policy: same-origin",
     'permissions-policy':
-        "Check whether this page embeds cross-origin iframes. If it does, closing the "
-        "features a browser leaves open to them costs nothing: "
-        + ", ".join(f + '=()' for f in sorted(_PP_DEFAULT_ANY_ORIGIN)),
+        "Close what this response does not need: "
+        + ", ".join(f + '=()' for f in sorted(_PP_TRACKING) + list(_PP_ONE_CLICK)),
     'referrer-policy':
         "Referrer-Policy: strict-origin-when-cross-origin",
     'cross-origin-embedder-policy':
@@ -1419,12 +1463,12 @@ _MISSING_DESCRIPTIONS: dict[str, str] = {
         "which can then be read from the cache after logout or by the next person to use "
         "a shared machine.",
     'permissions-policy':
-        "Every feature stays at the allowlist a browser applies by default. For most of "
-        "them that is this origin alone, so nothing embedded in the page gains anything "
-        "from the header being absent. The exception is the "
-        f"{len(_PP_DEFAULT_ANY_ORIGIN)} features a browser allows to every origin — "
-        f"{', '.join(sorted(_PP_DEFAULT_ANY_ORIGIN))} — which a cross-origin document "
-        "embedded here can use until a policy says otherwise. What is lost besides is the "
-        "hardening: with no policy, script that achieves execution on this origin keeps "
-        "every capability the user has already granted the site.",
+        "Every feature stays at the allowlist a browser applies by default, which leaves "
+        "two things open. A cross-origin document embedded in this page can use the "
+        f"features a browser allows to every origin — {', '.join(sorted(_PP_TRACKING))} — "
+        "which is tracking and fingerprinting surface. And script that achieves execution "
+        f"on this origin can raise the permission prompt for {', '.join(_PP_ONE_CLICK)}: "
+        "the prompt names the site, never the code that asked, so one click from a user "
+        "who cannot tell the two apart is the whole interaction. A policy is the only "
+        "thing that removes the prompt.",
 }

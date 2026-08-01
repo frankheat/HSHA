@@ -47,15 +47,16 @@ def profile(name: str) -> AppConfig:
     return load_config(str(ROOT / 'profiles' / f'{name}.yaml'))
 
 
-# The features a browser allows to every origin by default. A policy that does not
-# name these leaves them to whatever the page embeds, which is the only part of
-# Permissions-Policy that is a boundary rather than hardening.
-PP_DEFAULT_ANY_ORIGIN = [
+# The two things a Permissions-Policy is graded on. Tracking: a browser allows
+# these to every origin, so an embedded document has them until the policy says
+# otherwise. One-click: an XSS on this origin can raise their permission prompt,
+# and the prompt names the site rather than the code that asked.
+PP_TRACKING = [
     'attribution-reporting', 'browsing-topics', 'ch-ua-high-entropy-values',
-    'deferred-fetch-minimal', 'gamepad', 'picture-in-picture',
     'private-state-token-issuance', 'private-state-token-redemption', 'storage-access',
 ]
-PP_CLOSED = ", ".join(f"{feature}=()" for feature in PP_DEFAULT_ANY_ORIGIN)
+PP_ONE_CLICK = ['camera', 'microphone', 'geolocation']
+PP_CLOSED = ", ".join(f"{feature}=()" for feature in PP_TRACKING + PP_ONE_CLICK)
 
 # A response that satisfies every required header of the basic profile.
 CLEAN_HEADERS = [

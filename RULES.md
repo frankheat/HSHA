@@ -510,56 +510,74 @@ closes none of the any-origin features leaves — see below)*
 
 | Condition | Severity | Rationale |
 |---|---|---|
-| A feature whose default is this origin only, widened to `*` | MEDIUM | The policy is granting access rather than restricting it: any embedded document gains a capability a browser was already withholding |
-| One of the nine any-origin features left undeclared | LOW | A browser allows these to every origin, so an embedded document can use them until the policy says otherwise |
-| Features whose default is this origin only, left undeclared | INFO | Nothing embedded can use them either way — declaring them is hardening against script already running here |
+| A feature whose default is this origin only, widened to `*` | MEDIUM | The policy is granting access rather than restricting it: any embedded document gains a capability a browser was withholding |
+| A tracking feature still reachable by an embedded document | LOW | A browser allows these to every origin, so anything the page embeds has them until the policy says otherwise |
+| `camera`, `microphone` or `geolocation` not set to `()` | LOW | Script that achieves execution here can raise their permission prompt, and the prompt names the site rather than the code that asked |
 
-**What the grading follows: the default allowlist, not a list of feature names.**
-Every directive has a default a browser applies when the policy does not mention
-it, and it is always `*` or `self`. That default is the whole question, because it
-decides what an undeclared feature leaves open:
+**Two questions, asked separately.** The header answers one thing for documents
+the page embeds and a different thing for script running on the page's own origin,
+and a value can close one without closing the other. Grading them as one number
+loses that, so they are reported as two findings.
 
-- **Default `*`** — an embedded cross-origin document can use the feature. Leaving
-  it undeclared is a delegation to whatever the page embeds. Nine directives are
-  in this group: `attribution-reporting`, `browsing-topics`,
-  `ch-ua-high-entropy-values`, `deferred-fetch-minimal`, `gamepad`,
-  `picture-in-picture`, `private-state-token-issuance`,
-  `private-state-token-redemption`, `storage-access` — mostly tracking and
-  fingerprinting surface.
-- **Default `self`** — only this origin can use the feature, declared or not. That
-  covers the other forty, `camera`, `microphone`, `geolocation`, `payment`, `usb`
-  and `display-capture` among them.
+**The first axis: what an embedded document can reach.** Every directive has a
+default a browser applies when the policy does not name it, always `*` or `self`.
+Only nine default to `*`, and six of those are worth reporting —
+`attribution-reporting`, `browsing-topics`, `ch-ua-high-entropy-values`,
+`private-state-token-issuance`, `private-state-token-redemption`,
+`storage-access` — because what an embedded document gains from them is tracking
+and fingerprinting surface. The remaining three, `gamepad`, `picture-in-picture`
+and `deferred-fetch-minimal`, are open the same way with nothing behind them, so
+they are stated in the finding but kept out of its title.
 
-So an undeclared `camera` does not let an embedded third party reach the camera;
-a browser was never going to allow that. Declaring it is worth doing — it takes
-the capability away from script that has already achieved execution on the origin
-— but it is hardening, not a boundary, and grading it as an exposure puts the
-loudest finding on the least consequential half of the header.
+Everything else — `camera`, `payment`, `usb`, `display-capture` and the other
+thirty-six — defaults to `self`. An undeclared `camera` does **not** let an
+embedded third party reach the camera: a browser was never going to allow that,
+and the `allow` attribute on an iframe can only narrow what the parent already
+grants, never widen it.
 
-Whether the any-origin group costs anything depends on whether the page embeds
-cross-origin documents at all, which the response does not say, so that finding
-carries the check to run.
+Whether this axis costs anything depends on whether the page embeds cross-origin
+documents at all, which the response does not say, so the finding carries the
+check to run.
+
+**The second axis: what an XSS on this origin can reach.** A permission prompt
+names the site, never the code that asked for it. A user looking at *"example.com
+wants to use your camera"* while using example.com has no way to tell a genuine
+request from injected script, and grants it. So the exposure does not depend on
+the origin already holding a stored grant — script that reaches execution here
+can go and ask, and one click is the whole interaction.
+
+That is true of `camera`, `microphone` and `geolocation`. It is not true of the
+features whose prompt is followed by a choice: `display-capture` makes the user
+pick what to share, `usb`, `serial`, `hid` and `bluetooth` make them pick a
+device, `payment` opens a payment flow. There the consent is informed about *what*
+and not only about *who*.
+
+Only `()` closes this axis. `(self)` authorises this origin, and an XSS runs on
+this origin — reading a declared `camera=(self)` as "handled" would be a
+reassuring falsehood. The reverse holds on the first axis, where `(self)` is
+enough because it excludes every other origin.
+
+A site that genuinely uses one of the three can still close it on every response
+that does not, since the header is per-response; the finding asks that rather than
+assuming it.
 
 **A widened feature is read from its allowlist**, not searched for in the raw
 value: `x-payment=*` is a different feature from `payment`, and `camera=(self)`
 restates the default rather than opening anything.
 
-**Sending no header at all** leaves every feature at its default, which is the
-same position as a policy that names none of the any-origin nine — so it carries
-the same severity. A response that adds `camera=()` and nothing else has changed
-nothing for anything embedded in the page, and must not appear to have improved
-its standing; what it gained is the hardening, which is worth having and is not a
-boundary. The absent-header finding therefore names the nine and asks the same
-question, rather than recommending the four features a browser was already
-keeping to this origin.
+**Sending no header at all** leaves both axes open, which is the same position as
+a policy that closes neither — so it carries the same severity, and a response
+that declares an unrelated feature does not appear to have improved its standing.
+The absent-header finding states both axes and names both sets.
 
 **On publishing a list of every feature to disable.** Advice of that shape — set
-all of them to `()` — is sound for whoever configures the site, and costs
-nothing. It is a poor basis for a verdict, for two reasons. It grades the
-hardening half as loudly as the boundary half, and a fixed list goes stale: one
-widely circulated version still names `interest-cohort`, a directive for a feature
-its browser removed, while omitting `browsing-topics`, its successor, which is one
-of the nine that default to `*`.
+all of them to `()` — is sound for whoever configures the site. It is a poor basis
+for a verdict, and a fixed list goes stale in the place that matters: one widely
+circulated version names `interest-cohort`, a directive for a feature its browser
+removed, and covers two of the nine any-origin directives while covering
+twenty-one of the forty that default to `self`. It is thorough on the axis that
+needs an XSS to matter and nearly silent on the axis that needs nothing else at
+all — because the any-origin APIs mostly postdate it.
 
 ---
 
