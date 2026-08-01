@@ -1,6 +1,6 @@
 # HSHA — HTTP Security Header Analyzer — Basic configuration
 #
-# Checks the 14 core security headers.
+# Checks the 16 core security headers.
 # Use this profile for a standard security review.
 #
 # Usage:
@@ -18,10 +18,6 @@ headers:
   Expect-CT:
     skip: true
   Origin-Agent-Cluster:
-    skip: true
-  Access-Control-Allow-Origin:
-    skip: true
-  Access-Control-Allow-Credentials:
     skip: true
   Service-Worker-Allowed:
     skip: true

@@ -586,58 +586,6 @@ a question about network position, not about authentication.
 
 ---
 
-### X-XSS-Protection *(deprecated)*
-
-**Required:** no — **Absent:** OK *(not sending it is the correct state)*
-
-The value is a flag (`0` or `1`) optionally followed by directives, and only the
-flag decides the verdict — a digit inside a directive such as `report=1` is not
-one.
-
-| Value | Severity | Rationale |
-|---|---|---|
-| `0` (with or without trailing directives) | OK | The filter is off, which is the recommended setting; `mode=block` is irrelevant once it is |
-| `1` | LOW | Enables the filter — see below |
-| `1; mode=block` | LOW | Enables the filter in its leakiest mode — see below |
-| Any other value | INFO | Deprecated header, not doing anything risky |
-
-**Why enabling it is worse than disabling it.** The filter compared text from the
-URL against the scripts in the response and could not tell whether a matching
-script was injected or belonged to the page. Two consequences:
-
-- With `1`, an attacker could craft a URL that made the browser neutralise a
-  script the page legitimately contains — an anti-CSRF or framebusting script,
-  for example. The filter becomes a remote control for switching off a site's own
-  defences.
-- With `1; mode=block` the page is not rendered at all when the filter triggers,
-  and whether it was blocked is observable from another origin. That turns "does
-  this page contain script X?" into a yes/no answer readable cross-origin, and
-  repeating it with different scripts reveals whether the user is signed in, is
-  an administrator, and so on.
-
-Both stay LOW because no current browser honours the header: Chrome removed the
-auditor in 2019, Safari and Edge dropped theirs, and Firefox never had one.
-
----
-
-## Headers — Extended Profile Only
-
-The following headers are checked only when using `profiles/extended.yaml`.
-
----
-
-### Origin-Agent-Cluster
-
-**Required:** no — **Severity if missing:** INFO
-
-| Value | Severity | Rationale |
-|---|---|---|
-| `?1` | OK | Origin isolation enabled |
-| `?0` | LOW | Isolation explicitly disabled |
-| Any other value | INFO | Unrecognized value |
-
----
-
 ### Access-Control-Allow-Origin
 
 **Required:** no — **Severity if missing:** INFO *(absent = same-origin only, which is secure by default)*
@@ -732,6 +680,58 @@ authenticated CORS, and there is nothing here. An earlier version
 graded it INFO on the grounds that a one-off verification should not fail a build;
 that reasoning went with the exit code, and it had the tool printing a note that
 the reader was expected to re-grade by hand.
+
+---
+
+### X-XSS-Protection *(deprecated)*
+
+**Required:** no — **Absent:** OK *(not sending it is the correct state)*
+
+The value is a flag (`0` or `1`) optionally followed by directives, and only the
+flag decides the verdict — a digit inside a directive such as `report=1` is not
+one.
+
+| Value | Severity | Rationale |
+|---|---|---|
+| `0` (with or without trailing directives) | OK | The filter is off, which is the recommended setting; `mode=block` is irrelevant once it is |
+| `1` | LOW | Enables the filter — see below |
+| `1; mode=block` | LOW | Enables the filter in its leakiest mode — see below |
+| Any other value | INFO | Deprecated header, not doing anything risky |
+
+**Why enabling it is worse than disabling it.** The filter compared text from the
+URL against the scripts in the response and could not tell whether a matching
+script was injected or belonged to the page. Two consequences:
+
+- With `1`, an attacker could craft a URL that made the browser neutralise a
+  script the page legitimately contains — an anti-CSRF or framebusting script,
+  for example. The filter becomes a remote control for switching off a site's own
+  defences.
+- With `1; mode=block` the page is not rendered at all when the filter triggers,
+  and whether it was blocked is observable from another origin. That turns "does
+  this page contain script X?" into a yes/no answer readable cross-origin, and
+  repeating it with different scripts reveals whether the user is signed in, is
+  an administrator, and so on.
+
+Both stay LOW because no current browser honours the header: Chrome removed the
+auditor in 2019, Safari and Edge dropped theirs, and Firefox never had one.
+
+---
+
+## Headers — Extended Profile Only
+
+The following headers are checked only when using `profiles/extended.yaml`.
+
+---
+
+### Origin-Agent-Cluster
+
+**Required:** no — **Severity if missing:** INFO
+
+| Value | Severity | Rationale |
+|---|---|---|
+| `?1` | OK | Origin isolation enabled |
+| `?0` | LOW | Isolation explicitly disabled |
+| Any other value | INFO | Unrecognized value |
 
 ---
 
