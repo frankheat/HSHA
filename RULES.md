@@ -600,7 +600,7 @@ a question about network position, not about authentication.
 | `null` | **HIGH** | Forgeable by any attacker and, unlike `*`, usable with credentials — see below |
 | More than one origin (`https://a.example, https://b.example`) | INFO | The header carries exactly one origin, `*` or `null`. A list never matches the requesting origin, so the CORS check fails and no site gets access, including the intended ones. Fails closed, so it is a broken configuration rather than an exposure. Usually means two components are both setting the header — typically the application and a proxy in front of it |
 | `http://` origin | LOW | The allowed origin is not protected by TLS, so anyone able to tamper with traffic to it can impersonate it and read what this endpoint returns to it. A `localhost` origin here usually means a development configuration reached production |
-| Specific `https://` origin | OK | Correctly restricted to a trusted origin |
+| Specific `https://` origin | ? **HIGH** | An allowlist and a mirror of the request's `Origin` are the same bytes — see below |
 
 #### When the wildcard actually costs something
 
@@ -622,6 +622,25 @@ grades the case it cannot rule out — reaching a network through a victim's
 browser is a data exposure, not a configuration blemish. What settles it is
 whether the endpoint is reachable from anywhere or only from certain networks; on
 a genuinely public one there is nothing here.
+
+#### A single origin is graded as the case it cannot be told apart from
+
+One origin authorised is how CORS is meant to be used, and most responses that
+carry it are correct. But a server that copies the request's `Origin` header into
+the response produces exactly this header, and then the authorised origin is
+whichever one asked — any site reads what the endpoint returns, which is `*` by
+another route.
+
+A saved response cannot tell the two apart, so the finding states the case it
+cannot rule out and carries the replay that settles it: send the request again
+with an invented `Origin`. If it comes back, the origin is reflected. If the
+header keeps naming the original origin, or disappears, the allowlist is real and
+there is nothing here.
+
+With `Access-Control-Allow-Credentials: true` alongside, the same reflection is
+graded again on that header and at CRITICAL, because then what any site reads is
+the logged-in user's data rather than whatever is served unauthenticated. One
+replay settles both.
 
 #### Why `null` outranks `*`
 

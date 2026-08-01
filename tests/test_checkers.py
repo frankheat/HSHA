@@ -98,7 +98,7 @@ CASES = [
     ("Origin-Agent-Cluster", "1", Severity.INFO),
 
     # --- CORS ---
-    ("Access-Control-Allow-Origin", "https://trusted.example.com", Severity.OK),
+    ("Access-Control-Allow-Origin", "https://trusted.example.com", Severity.HIGH),
     ("Access-Control-Allow-Origin", "*", Severity.HIGH),
     ("Access-Control-Allow-Origin", "null", Severity.HIGH),
     ("Access-Control-Allow-Origin", "NULL", Severity.HIGH),
@@ -335,8 +335,14 @@ def test_acao_null_is_not_treated_as_a_trusted_origin():
     assert not has(findings, "specific origin")
 
 
-def test_acao_still_accepts_a_real_origin():
-    assert severity_for("Access-Control-Allow-Origin", "https://app.example.com") == Severity.OK
+def test_acao_single_origin_is_graded_as_the_reflected_case():
+    """An allowlist and a mirror produce the same bytes. If it is a mirror, the
+    authorised origin is whichever one asked — the wildcard by another route."""
+    findings = findings_for("Access-Control-Allow-Origin", "https://app.example.com")
+    assert findings[0].severity == Severity.HIGH
+    assert findings[0].is_contingent
+    assert severity_for("Access-Control-Allow-Origin", "https://app.example.com") == \
+           severity_for("Access-Control-Allow-Origin", "*")
 
 
 def test_acao_multiple_origins_explains_that_nobody_gets_access():
@@ -352,8 +358,12 @@ def test_acao_plaintext_origin_is_reported_before_the_ok_branch():
     assert not has(findings, "specific origin")
 
 
-def test_acao_https_origin_stays_ok():
-    assert severity_for("Access-Control-Allow-Origin", "https://app.example.com") == Severity.OK
+def test_acao_single_origin_names_the_replay_and_both_outcomes():
+    finding = findings_for("Access-Control-Allow-Origin", "https://app.example.com")[0]
+    assert "Origin: https://an-origin-you-made-up.example" in finding.verify
+    assert "comes back" in finding.verify
+    assert "nothing here" in finding.verify
+    assert "https://app.example.com" in finding.verify   # what a real allowlist keeps naming
 
 
 def test_acao_wildcard_names_the_case_that_actually_matters():

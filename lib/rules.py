@@ -1239,7 +1239,22 @@ def _check_acao(value: str, extra: dict) -> list[Finding]:
                         "reached production.",
             recommendation="Allow an https:// origin instead.",
         )]
-    return [Finding('Access-Control-Allow-Origin', Severity.OK, f"Access-Control-Allow-Origin: specific origin ('{n}')")]
+    # A response that echoes the request's Origin is byte-for-byte this one, and a
+    # single saved response cannot tell an allowlist from a mirror. Graded as the
+    # case it cannot rule out: a reflected origin makes this the wildcard, since
+    # whatever the attacker sends comes back.
+    return [Finding(
+        header='Access-Control-Allow-Origin',
+        severity=Severity.HIGH,
+        title=f"Access-Control-Allow-Origin: single origin ('{n}') — an allowlist or a mirror",
+        description="One origin is authorised, which is how CORS is meant to be used. But a "
+                    "server that copies the request's Origin header into the response produces "
+                    "exactly this, and then the authorised origin is whichever one asked: any "
+                    "site reads what this endpoint returns, the same as '*'.",
+        verify="Replay the request with Origin: https://an-origin-you-made-up.example. If it "
+               "comes back here, the origin is reflected and this stands. If the header keeps "
+               f"naming {n} or disappears, the allowlist is real and there is nothing here.",
+    )]
 
 
 def _check_acac(value: str, extra: dict) -> list[Finding]:
