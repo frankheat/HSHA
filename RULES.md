@@ -16,7 +16,11 @@ This document describes every check implemented by HSHA — what triggers a find
 | **NOTE** | Informational note only (e.g. duplicate header) — never counted as a failure |
 | **OK** | Correctly configured |
 
-Severity is what a finding is worth **if it applies to this target**. Whether it applies is a separate question, and for some checks the response cannot settle it — those carry the check that would, and what each outcome means, under a heading of their own in the report. No severity reaches the process exit status, which only reports whether the analysis could be run at all.
+Severity is what a finding is worth **if it applies to this target**. Whether it applies is a separate question, and for some checks a saved response cannot settle it: whether the page uses the camera, whether this endpoint returns a signed-in user's data, whether an allowlisted origin was echoed back rather than configured.
+
+Those findings are written **`? LOW`** in the tables below — the same mark the report puts beside them — and they carry the check that settles them and what each outcome means. The severity states the case the response cannot rule out, so a `? CRITICAL` is not a verdict: it is what the reader will be looking at if the check comes back positive, and nothing at all if it does not.
+
+No severity reaches the process exit status, which only reports whether the analysis could be run at all.
 
 ---
 
@@ -252,7 +256,7 @@ Strict-Transport-Security:
 | Value | Severity | Rationale |
 |---|---|---|
 | `same-origin` | OK | Only a same-origin document sending it shares a browsing context group — optimal |
-| `same-origin-allow-popups`, `noopener-allow-popups` | LOW | A window they open that sends no COOP of its own keeps a reference back to this document |
+| `same-origin-allow-popups`, `noopener-allow-popups` | ? LOW | A window they open that sends no COOP of its own keeps a reference back to this document |
 | `unsafe-none` | MEDIUM | Any document that opens this one keeps a reference to it — no XS-Leak protection |
 | Anything a browser cannot apply | Same as absent | No policy applies, so the response is where it would be with no header |
 
@@ -286,9 +290,8 @@ reference back.
 
 Whether that costs anything here depends on something the response cannot say: if
 the document opens only an OAuth or payment provider it chose, the other party is
-trusted and this is the value to use. The finding therefore carries **the check to
-run** — what does this document pass to `window.open()`? — rather than a change to
-make blindly. It is still graded as a weakness, because only `same-origin` closes
+trusted and this is the value to use. What settles it is what this document passes
+to `window.open()`. It is still graded as a weakness, because only `same-origin` closes
 both directions and the reader is the one who can settle the condition in a few
 seconds.
 
@@ -328,7 +331,7 @@ disclosure — and one every value graded OK below already makes.
 |---|---|---|
 | `no-referrer`, `same-origin` | OK | Nothing |
 | `strict-origin`, `strict-origin-when-cross-origin` | OK | The origin, and only to TLS-protected destinations |
-| `origin`, `origin-when-cross-origin` | LOW | The origin, to plain-HTTP destinations as well |
+| `origin`, `origin-when-cross-origin` | ? LOW | The origin, to plain-HTTP destinations as well |
 | `no-referrer-when-downgrade` | **HIGH** | The full URL, to every destination reached over HTTPS |
 | `unsafe-url` | **HIGH** | The full URL, to plain-HTTP destinations as well |
 | Anything else | Same as absent | Nothing — no policy is applied at all |
@@ -347,8 +350,8 @@ OK disclose exactly the same thing to exactly the same recipients; the plain-HTT
 destinations are the only difference left, so they are what the pair is graded on.
 
 Whether that difference costs anything depends on whether the page reaches a
-plain-HTTP destination at all, which the response does not say — so the finding
-carries that check. It is still an issue rather than a note, because the pair
+plain-HTTP destination at all, which the response does not say. It is still an
+issue rather than a note, because the pair
 gives up strictly more than `strict-origin-when-cross-origin` and gets nothing
 back: over HTTPS the two behave identically, so there is no case in which the
 weaker value is the one a site needs.
@@ -444,17 +447,18 @@ proxies, gateways — which keep one copy and hand it to whoever asks next.
 This is the one header whose *correct* value depends on what the response
 carries: `public, max-age=31536000` is right for a static asset and a data leak
 on an account page. HSHA grades the case where caching costs something, and every
-verdict but `no-store` carries the question that settles it — does this response
-carry data belonging to a signed-in user? On a response that carries nothing
-user-specific there is nothing here, and `no-store` would only cost bandwidth.
+verdict but `no-store` turns on one question — does this response carry data
+belonging to a signed-in user? On a response that carries nothing user-specific
+there is nothing here, and `no-store` would only cost bandwidth, which is why it
+is the one value that needs no question.
 
 | Value | Severity | Rationale |
 |---|---|---|
 | `no-store` | OK | Nothing is stored anywhere, and right either way — the only verdict that needs no question |
-| `private` | LOW | Shared caches will not store it, so it cannot reach another user — but the browser still writes it to disk, where the back button after logout, or the next person on that machine, can recover it |
-| `no-cache` | MEDIUM | Forces revalidation before reuse; it does **not** prevent storage. A shared cache may keep the response, and nothing marks it as belonging to one user. `max-age=0` with `must-revalidate` is graded the same, being the same round trip |
-| Anything else a shared cache may store | **HIGH** | A CDN or proxy may keep the response under this URL and serve it to the next person who asks — one user's data handed to another. Covers `max-age`, `s-maxage`, `public`, and the qualified forms `private="Field"` / `no-cache="Field"`, which cover only the fields they name |
-| Absent, or no token a cache understands | MEDIUM | With no instruction, caches fall back to heuristic freshness and may store it anyway. A value made only of unrecognised tokens says nothing either, so it is graded the same |
+| `private` | ? LOW | Shared caches will not store it, so it cannot reach another user — but the browser still writes it to disk, where the back button after logout, or the next person on that machine, can recover it |
+| `no-cache` | ? MEDIUM | Forces revalidation before reuse; it does **not** prevent storage. A shared cache may keep the response, and nothing marks it as belonging to one user. `max-age=0` with `must-revalidate` is graded the same, being the same round trip |
+| Anything else a shared cache may store | ? **HIGH** | A CDN or proxy may keep the response under this URL and serve it to the next person who asks — one user's data handed to another. Covers `max-age`, `s-maxage`, `public`, and the qualified forms `private="Field"` / `no-cache="Field"`, which cover only the fields they name |
+| Absent, or no token a cache understands | ? MEDIUM | With no instruction, caches fall back to heuristic freshness and may store it anyway. A value made only of unrecognised tokens says nothing either, so it is graded the same |
 
 **Why the question is asked in the finding rather than answered up front.** An
 earlier version took it as a flag: the reader declared what the response carried
@@ -497,8 +501,8 @@ closes none of the any-origin features leaves — see below)*
 | Condition | Severity | Rationale |
 |---|---|---|
 | A feature whose default is this origin only, widened to `*` | MEDIUM | The policy is granting access rather than restricting it: any embedded document gains a capability a browser was withholding |
-| A tracking feature still reachable by an embedded document | INFO | The user's privacy toward a party the site chose to embed — often what that party was embedded to do |
-| `camera`, `microphone` or `geolocation` not set to `()` | LOW | Script that achieves execution here can raise their permission prompt, and the prompt names the site rather than the code that asked |
+| A tracking feature still reachable by an embedded document | ? INFO | The user's privacy toward a party the site chose to embed — often what that party was embedded to do |
+| `camera`, `microphone` or `geolocation` not set to `()` | ? LOW | Script that achieves execution here can raise their permission prompt, and the prompt names the site rather than the code that asked |
 
 **Two questions, asked separately.** The header answers one thing for documents
 the page embeds and a different thing for script running on the page's own origin,
@@ -528,7 +532,7 @@ reason the frame is there — `browsing-topics=()` would break what the site
 installed on purpose. It earns a look in the opposite case: a frame embedded for
 something else entirely, a chat widget or a video player, that picks these
 capabilities up along the way because nothing took them away. The response cannot
-say which of the two it is, so the finding carries that question.
+say which of the two it is.
 
 **The second axis: what an XSS on this origin can reach.** A permission prompt
 names the site, never the code that asked for it. A user looking at *"example.com
@@ -590,7 +594,7 @@ all — because the any-origin APIs mostly postdate it.
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `*` | **HIGH** | Any site can read the response — see below |
+| `*` | ? **HIGH** | Any site can read the response — see below |
 | `null` | **HIGH** | Forgeable by any attacker and, unlike `*`, usable with credentials — see below |
 | More than one origin (`https://a.example, https://b.example`) | INFO | The header carries exactly one origin, `*` or `null`. A list never matches the requesting origin, so the CORS check fails and no site gets access, including the intended ones. Fails closed, so it is a broken configuration rather than an exposure. Usually means two components are both setting the header — typically the application and a proxy in front of it |
 | `http://` origin | LOW | The allowed origin is not protected by TLS, so anyone able to tamper with traffic to it can impersonate it and read what this endpoint returns to it. A `localhost` origin here usually means a development configuration reached production |
@@ -613,9 +617,9 @@ cannot otherwise touch.
 HSHA reads a saved response, so it cannot tell the two situations apart: it sees
 the header, not where the endpoint lives or what the body holds. It therefore
 grades the case it cannot rule out — reaching a network through a victim's
-browser is a data exposure, not a configuration blemish — and carries the
-question that would settle it: is this endpoint reachable from anywhere, or only
-from certain networks? On a genuinely public endpoint there is nothing here.
+browser is a data exposure, not a configuration blemish. What settles it is
+whether the endpoint is reachable from anywhere or only from certain networks; on
+a genuinely public one there is nothing here.
 
 #### Why `null` outranks `*`
 
@@ -658,7 +662,7 @@ receives them. This header is therefore graded against
 |---|---|---|
 | `null` | **CRITICAL** | The null origin is forgeable by any page and is a concrete origin, so cookies are sent with it: an attacker's page reads this endpoint as the logged-in user |
 | `*` | INFO | Browsers refuse the wildcard together with credentials, so every credentialed request is rejected. Nothing is exposed by the combination itself — it is a functional contradiction, not a weakness, and the wildcard's own effect on non-credentialed requests is graded on `Access-Control-Allow-Origin` |
-| A specific origin | **CRITICAL** | Indistinguishable from a reflected `Origin`, which hands authenticated responses to any site — see below |
+| A specific origin | ? **CRITICAL** | Indistinguishable from a reflected `Origin`, which hands authenticated responses to any site — see below |
 | Absent | INFO | No origin is authorised to read the response, so credentials change nothing; usually a leftover |
 | Not evaluated (excluded by the profile) | INFO | Stated explicitly, because silence would read as approval |
 
@@ -671,10 +675,10 @@ issues requests, so it cannot tell them apart. If it is reflection, the outcome 
 the `null` case reached more easily: no sandboxed iframe or `data:` URL needed,
 just a page on the attacker's own domain.
 
-Severity states what the finding is worth if it applies, so it states that — and
-the check that settles it comes with it: replay the request with an invented
-`Origin` and see whether it comes back. If it does not, the allowlist is real,
-this is correct authenticated CORS, and there is nothing here. An earlier version
+Severity states what the finding is worth if it applies, so it states that. What
+settles it is a replayed request carrying an invented `Origin`: if it comes back,
+the server reflects; if it does not, the allowlist is real, this is correct
+authenticated CORS, and there is nothing here. An earlier version
 graded it INFO on the grounds that a one-off verification should not fail a build;
 that reasoning went with the exit code, and it had the tool printing a note that
 the reader was expected to re-grade by hand.
