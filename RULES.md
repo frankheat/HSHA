@@ -590,7 +590,7 @@ all — because the any-origin APIs mostly postdate it.
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `*` | MEDIUM | Any site can read the response — see below |
+| `*` | **HIGH** | Any site can read the response — see below |
 | `null` | **HIGH** | Forgeable by any attacker and, unlike `*`, usable with credentials — see below |
 | More than one origin (`https://a.example, https://b.example`) | INFO | The header carries exactly one origin, `*` or `null`. A list never matches the requesting origin, so the CORS check fails and no site gets access, including the intended ones. Fails closed, so it is a broken configuration rather than an exposure. Usually means two components are both setting the header — typically the application and a proxy in front of it |
 | `http://` origin | LOW | The allowed origin is not protected by TLS, so anyone able to tamper with traffic to it can impersonate it and read what this endpoint returns to it. A `localhost` origin here usually means a development configuration reached production |
@@ -611,9 +611,11 @@ endpoint — the victim's browser becomes a tunnel into a network the attacker
 cannot otherwise touch.
 
 HSHA reads a saved response, so it cannot tell the two situations apart: it sees
-the header, not where the endpoint lives or what the body holds. The finding
-stays MEDIUM and asks the question the reader has to answer — is this endpoint
-reachable from anywhere, or only from certain networks?
+the header, not where the endpoint lives or what the body holds. It therefore
+grades the case it cannot rule out — reaching a network through a victim's
+browser is a data exposure, not a configuration blemish — and carries the
+question that would settle it: is this endpoint reachable from anywhere, or only
+from certain networks? On a genuinely public endpoint there is nothing here.
 
 #### Why `null` outranks `*`
 
@@ -656,21 +658,26 @@ receives them. This header is therefore graded against
 |---|---|---|
 | `null` | **CRITICAL** | The null origin is forgeable by any page and is a concrete origin, so cookies are sent with it: an attacker's page reads this endpoint as the logged-in user |
 | `*` | INFO | Browsers refuse the wildcard together with credentials, so every credentialed request is rejected. Nothing is exposed by the combination itself — it is a functional contradiction, not a weakness, and the wildcard's own effect on non-credentialed requests is graded on `Access-Control-Allow-Origin` |
-| A specific origin | INFO | Correct authenticated CORS. Reported so the origin can be verified — see below |
+| A specific origin | **CRITICAL** | Indistinguishable from a reflected `Origin`, which hands authenticated responses to any site — see below |
 | Absent | INFO | No origin is authorised to read the response, so credentials change nothing; usually a leftover |
 | Not evaluated (excluded by the profile) | INFO | Stated explicitly, because silence would read as approval |
 
 `false` is OK regardless of the origin.
 
-**Why a specific origin is still reported.** A response that echoes back the
-request's `Origin` header is byte-for-byte identical to one that allowlists that
-origin, and HSHA analyses a single saved response — it never issues requests, so
-it cannot tell them apart. Reflection is at least as dangerous as `null` and
-easier to exploit: the attacker just serves a page from their own domain. The
-finding therefore explains how to check, by replaying the request with an
-invented `Origin` and seeing whether it comes back. It stays INFO because that is
-a one-off verification; failing every build for it would get the whole check
-suppressed, including the cases that matter.
+**Why a specific origin carries the weight of the reflected case.** A response
+that echoes back the request's `Origin` header is byte-for-byte identical to one
+that allowlists that origin, and HSHA analyses a single saved response — it never
+issues requests, so it cannot tell them apart. If it is reflection, the outcome is
+the `null` case reached more easily: no sandboxed iframe or `data:` URL needed,
+just a page on the attacker's own domain.
+
+Severity states what the finding is worth if it applies, so it states that — and
+the check that settles it comes with it: replay the request with an invented
+`Origin` and see whether it comes back. If it does not, the allowlist is real,
+this is correct authenticated CORS, and there is nothing here. An earlier version
+graded it INFO on the grounds that a one-off verification should not fail a build;
+that reasoning went with the exit code, and it had the tool printing a note that
+the reader was expected to re-grade by hand.
 
 ---
 

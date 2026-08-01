@@ -101,17 +101,22 @@ def _cors_credentials(results: dict[str, HeaderResult]) -> list[tuple[str, Findi
             "Never allowlist 'null'. Echo only origins from a fixed list.",
         )
 
+    # Graded for the case the response cannot rule out. An echoed Origin is
+    # byte-for-byte identical to an allowlisted one, and if that is what this is,
+    # the outcome is the null case reached more easily — no sandboxed iframe, just
+    # a page on the attacker's own domain.
     return finding(
-        Severity.INFO,
+        Severity.CRITICAL,
         f"Authenticated cross-origin access is granted to {origin}",
         f"This response lets {origin} read data using the user's cookies. A response that "
-        "echoes back the request's Origin header is byte-for-byte identical to one that "
-        "allowlists that origin, and a single saved response cannot tell them apart.",
+        "echoes back the request's Origin header looks exactly like one that allowlists that "
+        "origin, and a single saved response cannot tell them apart — so this is graded as "
+        "the reflected case until a request settles it.",
         verify="Replay the request with Origin: https://an-origin-you-made-up.example. If it "
                "comes back in Access-Control-Allow-Origin, the server reflects whatever it is "
-               "sent: any site reads this endpoint as the logged-in user, which is worse than "
-               "the null case and belongs at the top of the report. If it does not come back, "
-               "the allowlist is real and this is correct authenticated CORS.",
+               "sent and any site reads this endpoint as the logged-in user — this stands. If "
+               "it does not come back, the allowlist is real, this is correct authenticated "
+               "CORS, and there is nothing here.",
     )
 
 

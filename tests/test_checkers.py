@@ -99,7 +99,7 @@ CASES = [
 
     # --- CORS ---
     ("Access-Control-Allow-Origin", "https://trusted.example.com", Severity.OK),
-    ("Access-Control-Allow-Origin", "*", Severity.MEDIUM),
+    ("Access-Control-Allow-Origin", "*", Severity.HIGH),
     ("Access-Control-Allow-Origin", "null", Severity.HIGH),
     ("Access-Control-Allow-Origin", "NULL", Severity.HIGH),
     ("Access-Control-Allow-Origin", "https://a.example.com, https://b.example.com", Severity.INFO),
@@ -360,7 +360,7 @@ def test_acao_wildcard_names_the_case_that_actually_matters():
     """The old text only mentioned sensitive data, so a reader with an internal
     API concluded it did not apply to them."""
     finding = findings_for("Access-Control-Allow-Origin", "*")[0]
-    assert finding.severity == Severity.MEDIUM
+    assert finding.severity == Severity.HIGH
     assert "not by an attacker's server" in finding.description
     assert "reachable" in finding.verify
 

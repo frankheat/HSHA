@@ -75,3 +75,19 @@ def test_the_summary_counts_the_two_kinds_separately():
              if 'Settled:' in line or 'To confirm:' in line}
     assert "1 HIGH" in lines['Settled'] and "MEDIUM" not in lines['Settled']
     assert "1 MEDIUM" in lines['To confirm'] and "HIGH" not in lines['To confirm']
+
+
+def test_an_unconfirmed_worst_is_marked_in_the_overall_verdict():
+    """A CRITICAL that only a check could confirm must not head the report as a
+    settled one — the same reason the table marks it."""
+    out = render([result("Access-Control-Allow-Credentials",
+                         finding(Severity.CRITICAL, verify=CHECK))])
+    assert "Overall: ? CRITICAL" in flat(out)
+
+
+def test_a_settled_worst_is_not_marked():
+    out = render([
+        result("Content-Security-Policy", finding(Severity.CRITICAL)),
+        result("Permissions-Policy", finding(Severity.CRITICAL, verify=CHECK)),
+    ])
+    assert "Overall: CRITICAL" in flat(out)

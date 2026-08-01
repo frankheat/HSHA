@@ -38,9 +38,11 @@ def test_wildcard_with_credentials_is_functional_not_a_weakness():
     assert has(result.findings, "the request fails")
 
 
-def test_wildcard_response_still_fails_the_build_through_the_origin_header():
+def test_the_wildcard_is_still_graded_on_its_own_header():
+    """The credentials verdict is neutral here — browsers refuse the pair — so the
+    wildcard's own cost has to keep coming from Access-Control-Allow-Origin."""
     results = analyze(f"{ACAO}: *", f"{ACAC}: true")
-    assert results['access-control-allow-origin'].worst_severity == Severity.MEDIUM
+    assert results['access-control-allow-origin'].worst_severity == Severity.HIGH
 
 
 def test_wildcard_recommendation_warns_against_fixing_it_with_reflection():
@@ -48,11 +50,15 @@ def test_wildcard_recommendation_warns_against_fixing_it_with_reflection():
     assert "Do not echo back" in finding.recommendation
 
 
-def test_specific_origin_with_credentials_is_informational():
-    """Correct authenticated CORS must not fail a build."""
+def test_specific_origin_with_credentials_is_graded_as_the_reflected_case():
+    """An echoed Origin and an allowlisted one are the same bytes, and the echoed
+    one hands authenticated responses to any site. The response cannot rule that
+    out, so it carries the weight of the case it cannot rule out."""
     result = cors("https://app.example.com")
-    assert result.worst_severity == Severity.INFO
+    assert result.worst_severity == Severity.CRITICAL
     assert has(result.findings, "https://app.example.com")
+    assert all(f.is_contingent for f in result.findings
+               if f.severity == Severity.CRITICAL)
 
 
 def test_specific_origin_finding_warns_about_origin_reflection():
@@ -60,11 +66,12 @@ def test_specific_origin_finding_warns_about_origin_reflection():
     single response, so the finding has to tell the reader how to check — and
     what a positive result means, since it is far worse than what is printed."""
     finding = next(f for f in cors("https://app.example.com").findings
-                   if f.severity == Severity.INFO)
+                   if f.severity == Severity.CRITICAL)
     assert finding.is_contingent
     assert "echoes back" in finding.description
     assert "Origin: https://an-origin-you-made-up.example" in finding.verify
     assert "does not come back" in finding.verify
+    assert "nothing here" in finding.verify
 
 
 def test_credentials_without_an_origin_have_no_effect():

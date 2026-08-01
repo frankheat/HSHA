@@ -1169,7 +1169,7 @@ def _check_acao(value: str, extra: dict) -> list[Finding]:
     if n == '*':
         return [Finding(
             header='Access-Control-Allow-Origin',
-            severity=Severity.MEDIUM,
+            severity=Severity.HIGH,
             title="Access-Control-Allow-Origin: * (wildcard)",
             description="Any site can read this response. That costs nothing if the endpoint is "
                         "genuinely public, which is what the wildcard is for. It matters when the "

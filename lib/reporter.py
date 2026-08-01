@@ -125,6 +125,11 @@ def _print_summary(results: list[HeaderResult]):
 
     worst = max((f.severity for f in all_findings), default=Severity.OK)
     worst_color = SEVERITY_COLORS[worst]
+    # Marked when only a contingent finding reaches the top, the same way the table
+    # is: an unconfirmed CRITICAL heading an otherwise clean report would read as a
+    # verdict the tool has not earned.
+    unconfirmed = all(f.is_contingent for f in all_findings if f.severity == worst)
+    overall = f"Overall: {'? ' if all_findings and unconfirmed else ''}{SEVERITY_LABELS[worst]}"
 
     present = sum(1 for r in results if r.is_present)
     missing = sum(1 for r in results if not r.is_present)
@@ -143,7 +148,7 @@ def _print_summary(results: list[HeaderResult]):
 
     console.print(Panel(
         body,
-        title=f"[{worst_color}]Overall: {SEVERITY_LABELS[worst]}[/{worst_color}]",
+        title=f"[{worst_color}]{overall}[/{worst_color}]",
         border_style=worst_color,
     ))
     console.print()
