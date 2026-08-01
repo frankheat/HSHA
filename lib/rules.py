@@ -58,18 +58,19 @@ _CONTEXT_MISSING: dict[str, dict[str, Severity]] = {
 #   join      — occurrences combine into one value (RFC list headers; for CSP,
 #               multiple headers are all enforced, equivalent to joining with
 #               ','). Whether the combined value is still valid is the checker's
-#               business: COOP joins into something no browser can parse.
+#               business: COOP and COEP join into something no browser can parse.
 #   strictest — conflicting values make browsers block framing (X-Frame-Options)
 # ---------------------------------------------------------------------------
 _DUPLICATE_STRATEGIES: dict[str, str] = {
-    'referrer-policy':            'last',
-    'x-frame-options':            'strictest',
-    'content-security-policy':    'join',
-    'cache-control':              'join',
-    'clear-site-data':            'join',
-    'permissions-policy':         'join',
-    'pragma':                     'join',
-    'cross-origin-opener-policy': 'join',
+    'referrer-policy':              'last',
+    'x-frame-options':              'strictest',
+    'content-security-policy':      'join',
+    'cache-control':                'join',
+    'clear-site-data':              'join',
+    'permissions-policy':           'join',
+    'pragma':                       'join',
+    'cross-origin-opener-policy':   'join',
+    'cross-origin-embedder-policy': 'join',
 }
 
 
@@ -548,14 +549,17 @@ _SF_TOKEN = re.compile(r"^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:/]*$")
 _SF_PARAM_NAME = re.compile(r"^[a-z*][a-z0-9_.*-]*$")
 
 
-def _coop_token(value: str) -> Optional[str]:
-    """The policy token a browser reads out of a COOP header, or None when the
-    header does not parse.
+def _structured_token(value: str) -> Optional[str]:
+    """The token a browser reads out of a structured field of type item, or None
+    when the value does not parse.
 
-    COOP is a structured field of type item (HTML §7.1.3.1): one token, which may
+    COOP and COEP are both defined this way (HTML §7.1.3.1): one token, which may
     carry parameters — of these only `report-to` is defined, and no parameter
     changes which policy applies. What does matter is that a value which fails to
     parse leaves the policy at unsafe-none, so the header does nothing at all.
+
+    The caller checks for a comma first: that is how a browser sees the header sent
+    twice, and it deserves its own explanation.
     """
     parts = _split_outside_quotes(value, ';', keep_empty=True)
     token = parts[0].strip()
@@ -626,7 +630,7 @@ def _check_coop(value: str, extra: dict) -> list[Finding]:
             "Send Cross-Origin-Opener-Policy: same-origin once.",
         )]
 
-    n = _coop_token(value)
+    n = _structured_token(value)
     if n is None:
         return [_coop_not_applied(extra, f"'{value.strip()}' is not a valid header value")]
     if n == 'same-origin':
@@ -654,26 +658,80 @@ def _check_coop(value: str, extra: dict) -> list[Finding]:
     return [_coop_not_applied(extra, f"'{n}' is not a policy browsers recognize")]
 
 
+def _coep_no_isolation(extra: dict, title: str, why: str) -> Finding:
+    """Every way of not having COEP, graded alike — they are one browser state.
+
+    Unlike COOP, this is not an exposure: losing cross-origin isolation removes a
+    capability (SharedArrayBuffer, unthrottled timers) rather than opening
+    anything, and the browser withdraws it rather than running unsafely. So these
+    carry the severity of an absent COEP, which is what the response amounts to.
+    """
+    return Finding(
+        header='Cross-Origin-Embedder-Policy',
+        severity=extra.get(ABSENT_SEVERITY, Severity.INFO),
+        title=title,
+        description=f"{why} Cross-origin resources requested in no-cors mode load without "
+                    "having to opt in through CORP, and the document is not cross-origin "
+                    "isolated — the same position as never sending the header. This fails "
+                    "safe: features that depend on the isolation are withheld, not left "
+                    "running without it.",
+        recommendation="Set Cross-Origin-Embedder-Policy: require-corp (with "
+                       "Cross-Origin-Opener-Policy: same-origin) if cross-origin isolation "
+                       "is wanted.",
+    )
+
+
 def _check_coep(value: str, extra: dict) -> list[Finding]:
-    n = value.strip().lower()
+    # A comma is how a browser sees the header sent twice; MDN states the outcome
+    # outright: "Setting the header more than once or with multiple tokens is
+    # equivalent to setting unsafe-none."
+    if len(_split_outside_quotes(value, ',')) > 1:
+        return [_coep_no_isolation(
+            extra,
+            "COEP: the header is not applied — it carries more than one value",
+            "Cross-Origin-Embedder-Policy must hold a single token, and a browser cannot parse "
+            "this one, so it applies unsafe-none. Sending the header twice produces this, even "
+            "when both copies are identical.",
+        )]
+
+    n = _structured_token(value)
+    if n is None:
+        return [_coep_no_isolation(
+            extra,
+            f"COEP: the header is not applied — '{value.strip()}' is not a valid header value",
+            "A browser cannot parse this value, so it applies unsafe-none.",
+        )]
     if n == 'require-corp':
-        return [Finding('Cross-Origin-Embedder-Policy', Severity.OK, "COEP: require-corp (optimal)")]
+        return [Finding(
+            header='Cross-Origin-Embedder-Policy',
+            severity=Severity.OK,
+            title="COEP: require-corp",
+            description="Cross-origin resources requested in no-cors mode must opt in through "
+                        "CORP or CORS. This is the COEP half of cross-origin isolation, which "
+                        "also needs Cross-Origin-Opener-Policy: same-origin.",
+        )]
     if n == 'credentialless':
         return [Finding(
             header='Cross-Origin-Embedder-Policy',
-            severity=Severity.INFO,
+            severity=Severity.OK,
             title="COEP: credentialless",
-            description="Allows cross-origin resources without CORP, but strips credentials.",
-            recommendation="Consider require-corp for stronger isolation.",
+            description="Cross-origin resources requested in no-cors mode load without having "
+                        "to opt in through CORP, but are fetched with no credentials, so they "
+                        "cannot carry anyone's private data. It qualifies for cross-origin "
+                        "isolation exactly as require-corp does — a different mechanism for "
+                        "the same guarantee, not a weaker one.",
         )]
     if n == 'unsafe-none':
-        return [Finding(
-            header='Cross-Origin-Embedder-Policy',
-            severity=Severity.LOW,
-            title="COEP: unsafe-none disables embedding restrictions",
-            recommendation="Set Cross-Origin-Embedder-Policy: require-corp",
+        return [_coep_no_isolation(
+            extra,
+            "COEP: unsafe-none is the value a browser applies anyway",
+            "unsafe-none is the default, so stating it changes nothing.",
         )]
-    return [Finding('Cross-Origin-Embedder-Policy', Severity.INFO, f"COEP: unrecognized value '{value}'")]
+    return [_coep_no_isolation(
+        extra,
+        f"COEP: the header is not applied — '{n}' is not a policy browsers recognize",
+        "A browser that does not recognise the token applies unsafe-none.",
+    )]
 
 
 def _check_corp(value: str, extra: dict) -> list[Finding]:

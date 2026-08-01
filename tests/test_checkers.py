@@ -50,9 +50,13 @@ CASES = [
 
     # --- Cross-Origin-Embedder-Policy ---
     ("Cross-Origin-Embedder-Policy", "require-corp", Severity.OK),
-    ("Cross-Origin-Embedder-Policy", "credentialless", Severity.INFO),
-    ("Cross-Origin-Embedder-Policy", "unsafe-none", Severity.LOW),
+    ("Cross-Origin-Embedder-Policy", "credentialless", Severity.OK),
+    ("Cross-Origin-Embedder-Policy", 'require-corp; report-to="coep"', Severity.OK),
+    # Every way of not having COEP is one browser state, graded as the header's absence.
+    ("Cross-Origin-Embedder-Policy", "unsafe-none", Severity.INFO),
     ("Cross-Origin-Embedder-Policy", "bogus", Severity.INFO),
+    ("Cross-Origin-Embedder-Policy", "require-corp;", Severity.INFO),
+    ("Cross-Origin-Embedder-Policy", "require-corp, require-corp", Severity.INFO),
 
     # --- Cross-Origin-Resource-Policy ---
     ("Cross-Origin-Resource-Policy", "same-origin", Severity.OK),
@@ -566,6 +570,51 @@ def test_coop_allow_popups_asks_for_a_check_not_a_change(value):
     assert recommendation.startswith("Check")
     assert "window.open()" in recommendation
     assert "same-origin" in recommendation
+
+
+# ---------------------------------------------------------------------------
+# COEP: the same structured-item shape, graded as one browser state
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("value", [
+    "unsafe-none",                  # the default, stated
+    "bogus",                        # unrecognised token
+    "require-corp;",                # RFC 8941 §4.2.3.2: a parameter needs a key
+    "require-corp, require-corp",   # what a browser sees when it is sent twice
+])
+def test_coep_every_way_of_not_having_it_matches_an_absent_header(value):
+    """MDN: 'Setting the header more than once or with multiple tokens is
+    equivalent to setting unsafe-none.' unsafe-none is also what a browser applies
+    with no header at all, so all of these are one state and carry one severity."""
+    absent = analyze("X-Nothing: x")['cross-origin-embedder-policy'].worst_severity
+    assert severity_for("Cross-Origin-Embedder-Policy", value) == absent
+
+
+def test_coep_not_having_it_is_not_reported_as_an_exposure():
+    """Losing cross-origin isolation withdraws a capability rather than opening
+    anything — the finding has to say so, or the severity reads as an oversight."""
+    findings = findings_for("Cross-Origin-Embedder-Policy", "unsafe-none")
+    assert "fails safe" in findings[0].description
+
+
+def test_coep_credentialless_is_not_called_weaker_than_require_corp():
+    """Both qualify for cross-origin isolation; credentialless reaches it by
+    stripping credentials instead of demanding CORP, which is a different
+    mechanism for the same guarantee."""
+    findings = findings_for("Cross-Origin-Embedder-Policy", "credentialless")
+    assert severity_for("Cross-Origin-Embedder-Policy", "credentialless") == Severity.OK
+    assert findings[0].recommendation == ""
+    assert "not a weaker one" in findings[0].description
+
+
+def test_coep_require_corp_does_not_claim_isolation_on_its_own():
+    findings = findings_for("Cross-Origin-Embedder-Policy", "require-corp")
+    assert "Cross-Origin-Opener-Policy: same-origin" in findings[0].description
+
+
+def test_coep_report_to_parameter_does_not_change_the_policy():
+    assert severity_for("Cross-Origin-Embedder-Policy",
+                        'require-corp; report-to="coep"') == Severity.OK
 
 
 def test_coop_unusable_value_follows_a_config_override():

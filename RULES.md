@@ -45,7 +45,7 @@ effective value the same way browsers do, then evaluates that value:
 
 | Strategy | Headers | Behavior |
 |---|---|---|
-| Join | `Content-Security-Policy`, `Cache-Control`, `Clear-Site-Data`, `Permissions-Policy`, `Pragma`, `Cross-Origin-Opener-Policy` | Occurrences combine into a single value |
+| Join | `Content-Security-Policy`, `Cache-Control`, `Clear-Site-Data`, `Permissions-Policy`, `Pragma`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy` | Occurrences combine into a single value |
 | Identical values | any other header | Collapsed to the single value |
 | First wins | default (e.g. `Strict-Transport-Security`, RFC 6797 §8.1) | First occurrence is evaluated |
 | Last wins | `Referrer-Policy` | Browsers honor the last valid value |
@@ -70,10 +70,10 @@ there is nothing to fix.
 The duplicate finding stays a NOTE under join even when the combined value turns
 out to be unusable — the repetition still discarded nothing. Whether the result
 parses is graded separately by that header's own check, which is where a
-duplicated `Cross-Origin-Opener-Policy` is reported: COOP must hold a single
-token, so the joined value fails to parse and the browser applies `unsafe-none`.
-Two identical COOP headers therefore leave the response with no COOP at all, and
-that is graded like the header being absent.
+duplicated `Cross-Origin-Opener-Policy` or `Cross-Origin-Embedder-Policy` is
+reported: both must hold a single token, so the joined value fails to parse and
+the browser applies `unsafe-none`. Two identical COOP headers therefore leave the
+response with no COOP at all, and that is graded like the header being absent.
 
 Under **first**, **last** and **strictest** one occurrence wins and the others are
 discarded. That is a misconfiguration: two components disagree — typically the
@@ -373,10 +373,39 @@ in force.
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `require-corp` | OK | Optimal — the COEP half of cross-origin isolation, which also needs `COOP: same-origin` |
-| `credentialless` | INFO | Allows cross-origin resources without CORP, strips credentials |
-| `unsafe-none` | LOW | Disables embedding restrictions |
-| Any other value | INFO | Unrecognized value |
+| `require-corp` | OK | Cross-origin no-cors resources must opt in through CORP or CORS |
+| `credentialless` | OK | They load without opting in, but with no credentials, so they carry nobody's private data |
+| `unsafe-none`, and anything a browser cannot apply | Same as absent | One browser state — see below |
+
+**What the header may contain.** COEP is a structured field of type *item*, the
+same shape as COOP: a single token, optionally carrying a `report-to` parameter
+that never decides which policy applies. So `require-corp; report-to="coep"` is
+plain `require-corp`.
+
+**Every way of not having COEP is one state.** `unsafe-none` is the value a
+browser applies when the header is absent, so stating it explicitly changes
+nothing. A value that cannot be parsed or is not recognised ends in the same
+place — the spec says the processing model *"fails open (by defaulting to
+unsafe-none)"* — and so does a header sent twice, which MDN puts plainly:
+*"Setting the header more than once or with multiple tokens is equivalent to
+setting `unsafe-none`."* All of them are graded as an absent COEP, because that
+is what the response amounts to.
+
+**Why that severity is low, unlike the equivalent for COOP.** Not having COEP is
+not an exposure. It withdraws a capability rather than opening anything: without
+cross-origin isolation the browser refuses `SharedArrayBuffer` and unthrottled
+timers instead of allowing them over resources that never consented. A COEP that
+silently fails to apply therefore breaks a feature, not a boundary — the site
+notices, and nothing is at risk in the meantime. A COOP that silently fails to
+apply leaves a document open to being probed, which is why that one is graded far
+higher.
+
+**`credentialless` is not a weaker `require-corp`.** Both qualify a document for
+cross-origin isolation. They differ in mechanism: `require-corp` demands that
+every cross-origin no-cors resource opt in, while `credentialless` lets it load
+but strips the credentials, so it cannot contain private data in the first place.
+Neither overrides a CORP header the resource already sets. Same guarantee, two
+routes to it.
 
 ---
 
