@@ -273,7 +273,7 @@ Strict-Transport-Security:
 |---|---|---|
 | `DENY` | OK | Nothing can frame the page |
 | `SAMEORIGIN` | ? LOW | Another page on this origin can still frame it — see below |
-| More than one value, at least one usable | LOW | The browser refuses the frame rather than guess, so framing is blocked by the contradiction rather than by a decision |
+| More than one value, at least one usable | NOTE | The browser refuses the frame rather than guess: framing is blocked, so this is stated and not graded — see below |
 | `ALLOW-FROM ...`, or anything else | Same as absent | No browser applies either, so the page is framable — see below |
 
 **The values are read as a set.** HTML's *check a navigation response's adherence
@@ -285,10 +285,15 @@ entry is unusable does framing go ahead. Two consequences:
 
 - `DENY, DENY` is one entry, and blocks. Repeating the value — which is what a
   proxy appending to the header produces — changes nothing.
-- `DENY, SAMEORIGIN` blocks too, and so does `SAMEORIGIN, anything`. The header
-  contradicting itself is safe, and is reported because the outcome is an accident
-  of the contradiction: whichever component set the ignored value is working on a
-  false assumption.
+- `DENY, SAMEORIGIN` blocks too, and so does `SAMEORIGIN, anything`.
+
+A contradiction is reported as a **note**, not as a weakness, and the reason is
+worth stating: it can only ever be *stricter* than the values it is made of.
+`ALLOWALL, bogus` blocks, where either value on its own would let the page be
+framed. The outcome is the strongest one available, and it is the same in every
+browser, so there is nothing here to grade. What is left is a deployment fact —
+whichever component set the ignored value is working on a false assumption, and
+two components writing this header may be writing others.
 
 Repeated headers are joined with a comma before that split, so they take the same
 path — including two unusable values, which leave the page framable.

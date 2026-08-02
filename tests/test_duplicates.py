@@ -151,9 +151,11 @@ def test_x_frame_options_conflict_is_resolved_by_its_own_checker():
 
 
 def test_x_frame_options_conflict_is_not_reported_as_optimal():
-    """Framing is refused, but by the contradiction rather than by a choice."""
+    """Framing is refused, so nothing is at risk — but the response does not get an
+    OK either, because it never said what it meant."""
     result = analyze("X-Frame-Options: deny", "X-Frame-Options: sameorigin")['x-frame-options']
-    assert result.worst_severity == Severity.LOW
+    assert result.worst_severity == Severity.NOTE
+    assert not has(result.findings, "DENY (optimal)")
 
 
 def test_two_unusable_x_frame_options_values_do_not_become_a_deny():

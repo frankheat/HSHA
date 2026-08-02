@@ -31,8 +31,8 @@ CASES = [
     # The browser works on a set: repeats collapse, and a mixture that still holds
     # a usable value blocks rather than falling back.
     ("X-Frame-Options", "DENY, DENY", Severity.OK),
-    ("X-Frame-Options", "DENY, SAMEORIGIN", Severity.LOW),
-    ("X-Frame-Options", "SAMEORIGIN, bogus", Severity.LOW),
+    ("X-Frame-Options", "DENY, SAMEORIGIN", Severity.NOTE),
+    ("X-Frame-Options", "SAMEORIGIN, bogus", Severity.NOTE),
     ("X-Frame-Options", "bogus, garbage", Severity.HIGH),
 
     # --- X-Content-Type-Options ---
@@ -897,12 +897,22 @@ def test_frame_options_repeated_value_is_still_a_deny():
 
 
 @pytest.mark.parametrize("value", ["DENY, SAMEORIGIN", "SAMEORIGIN, bogus", "ALLOWALL, DENY"])
-def test_frame_options_contradiction_blocks_but_is_reported(value):
-    """A browser refuses the frame rather than guess, so the page is not framable —
-    but by the contradiction, not by a decision."""
+def test_frame_options_contradiction_is_stated_not_graded(value):
+    """The outcome is the strongest one and the same in every browser, so there is
+    no weakness to grade. What is left is a deployment fact: two components are
+    writing this header, and they may be writing others."""
     findings = findings_for("X-Frame-Options", value)
-    assert findings[0].severity == Severity.LOW
+    assert findings[0].severity == Severity.NOTE
+    assert not is_issue(findings[0].severity)
     assert "contradicting itself" in findings[0].title
+
+
+def test_a_frame_options_contradiction_is_never_more_permissive():
+    """`allowall, bogus` blocks where either value alone would not — which is why
+    the contradiction is not graded as a weakness."""
+    assert severity_for("X-Frame-Options", "ALLOWALL") == \
+           analyze("X-Nothing: x")['x-frame-options'].worst_severity
+    assert severity_for("X-Frame-Options", "ALLOWALL, bogus") == Severity.NOTE
 
 
 def test_frame_options_sameorigin_asks_whether_the_page_needs_framing():

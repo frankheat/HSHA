@@ -570,15 +570,20 @@ def _check_x_frame_options(value: str, extra: dict) -> list[Finding]:
 
     if len(values) > 1:
         if usable:
+            # Not a weakness: the outcome is the strongest one, it is the same in
+            # every browser, and a contradiction here can only be stricter than its
+            # parts — `allowall, bogus` blocks where either alone would not. What is
+            # left to report is a deployment fact, so it is reported as one.
             return [Finding(
                 header='X-Frame-Options',
-                severity=Severity.LOW,
+                severity=Severity.NOTE,
                 title=f"X-Frame-Options: '{value}' blocks framing by contradicting itself",
                 description="More than one value is given, and at least one is usable, so a "
-                            "browser refuses the frame rather than guess which was meant. The "
-                            "page is not framable — but by the contradiction, not by a decision, "
-                            "and whichever component set the value that is being ignored is "
-                            "working on a false assumption.",
+                            "browser refuses the frame rather than guess which was meant. "
+                            "Framing is prevented, and a contradiction here can only ever be "
+                            "stricter than the values it is made of — but whichever component "
+                            "set the value being ignored is working on a false assumption, and "
+                            "two components writing this header may be writing others.",
                 recommendation="Send X-Frame-Options once, with DENY.",
             )]
         return [Finding(
