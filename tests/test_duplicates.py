@@ -31,21 +31,24 @@ def test_single_occurrence_produces_no_duplicate_finding():
 # ---------------------------------------------------------------------------
 
 def test_identical_duplicates_collapse_to_one_value():
-    result = analyze("Referrer-Policy: no-referrer", "Referrer-Policy: no-referrer")['referrer-policy']
-    assert result.value == "no-referrer"
+    result = analyze("Strict-Transport-Security: max-age=31536000; includeSubDomains",
+                     "Strict-Transport-Security: max-age=31536000; includeSubDomains"
+                     )['strict-transport-security']
+    assert result.value == "max-age=31536000; includeSubDomains"
     finding = duplicate_finding(result)
     assert finding.severity == Severity.NOTE
     assert "identical" in finding.description
 
 
 def test_identical_duplicates_ignore_case_and_padding():
-    result = analyze("Referrer-Policy: no-referrer",
-                     "Referrer-Policy:   NO-REFERRER  ")['referrer-policy']
+    result = analyze("X-Content-Type-Options: nosniff",
+                     "X-Content-Type-Options:   NOSNIFF  ")['x-content-type-options']
     assert duplicate_finding(result).severity == Severity.NOTE
 
 
 def test_identical_duplicates_do_not_make_a_header_fail():
-    result = analyze("Referrer-Policy: no-referrer", "Referrer-Policy: no-referrer")['referrer-policy']
+    result = analyze("X-Content-Type-Options: nosniff",
+                     "X-Content-Type-Options: nosniff")['x-content-type-options']
     assert result.worst_severity == Severity.NOTE
     assert Severity.NOTE < Severity.INFO      # below the issue threshold
 
@@ -56,7 +59,6 @@ def test_identical_duplicates_do_not_make_a_header_fail():
 
 @pytest.mark.parametrize("header,key,first,second", [
     ("Strict-Transport-Security", 'strict-transport-security', "max-age=31536000", "max-age=600"),
-    ("Referrer-Policy", 'referrer-policy', "unsafe-url", "no-referrer"),
 ])
 def test_conflicting_duplicates_are_low(header, key, first, second):
     """Only where the resolution discards one of the values."""
@@ -91,7 +93,8 @@ def test_joined_duplicates_carry_no_recommendation():
 
 
 def test_conflict_finding_names_the_problem():
-    result = analyze("Referrer-Policy: unsafe-url", "Referrer-Policy: no-referrer")['referrer-policy']
+    result = analyze("Strict-Transport-Security: max-age=1",
+                     "Strict-Transport-Security: max-age=2")['strict-transport-security']
     assert "conflicting values" in duplicate_finding(result).title
 
 
@@ -122,11 +125,17 @@ def test_default_strategy_is_first_wins():
     assert any("max-age too short" in f.title for f in result.findings)
 
 
-def test_referrer_policy_is_last_wins():
-    result = analyze("Referrer-Policy: unsafe-url", "Referrer-Policy: no-referrer")['referrer-policy']
-    assert result.value == "no-referrer"
-    # the unsafe first value is not applied, so no HIGH finding for it
-    assert result.worst_severity == Severity.LOW
+def test_referrer_policy_keeps_the_last_valid_token_across_occurrences():
+    """A browser concatenates the occurrences and walks the tokens, so the last
+    *valid* one wins — not the last occurrence."""
+    both_valid = analyze("Referrer-Policy: unsafe-url",
+                         "Referrer-Policy: no-referrer")['referrer-policy']
+    assert both_valid.value == "unsafe-url, no-referrer"
+    assert both_valid.worst_severity == Severity.NOTE      # no-referrer is applied
+
+    last_invalid = analyze("Referrer-Policy: no-referrer",
+                           "Referrer-Policy: bogus")['referrer-policy']
+    assert last_invalid.worst_severity == Severity.NOTE    # bogus is skipped, not honoured
 
 
 @pytest.mark.parametrize("header,key", [

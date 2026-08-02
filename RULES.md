@@ -58,11 +58,9 @@ effective value the same way browsers do, then evaluates that value:
 
 | Strategy | Headers | Behavior |
 |---|---|---|
-| Join | `Content-Security-Policy`, `Cache-Control`, `Clear-Site-Data`, `Permissions-Policy`, `Pragma`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy` | Occurrences combine into a single value |
+| Join | `Content-Security-Policy`, `Cache-Control`, `Clear-Site-Data`, `Permissions-Policy`, `Pragma`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy`, `Referrer-Policy`, `X-Frame-Options` | Occurrences combine into a single value |
 | Identical values | any other header | Collapsed to the single value |
 | First wins | default (e.g. `Strict-Transport-Security`, RFC 6797 §8.1) | First occurrence is evaluated |
-| Last wins | `Referrer-Policy` | Browsers honor the last valid value |
-| Strictest | `X-Frame-Options` | Conflicting values make browsers block framing — evaluated as `DENY` |
 
 Join is applied before the identical-values shortcut, because a browser
 concatenates the occurrences whether or not they agree — and for a header that
@@ -88,8 +86,7 @@ reported: both must hold a single token, so the joined value fails to parse and
 the browser applies `unsafe-none`. Two identical COOP headers therefore leave the
 response with no COOP at all, and that is graded like the header being absent.
 
-Under **first**, **last** and **strictest** one occurrence wins and the others are
-discarded. That is a misconfiguration: two components disagree — typically the
+Under **first** one occurrence wins and the others are discarded. That is a misconfiguration: two components disagree — typically the
 application and a CDN or WAF in front of it — and whoever configured the losing
 value is operating on a false assumption. The winning value is decided by a
 resolution rule rather than by anything the site chose, and that resolution is not
@@ -533,7 +530,21 @@ disclosure — and one every value graded OK below already makes.
 | `origin`, `origin-when-cross-origin` | ? LOW | The origin, to plain-HTTP destinations as well |
 | `no-referrer-when-downgrade` | **HIGH** | The full URL, to every destination reached over HTTPS |
 | `unsafe-url` | **HIGH** | The full URL, to plain-HTTP destinations as well |
-| Anything else | Same as absent | Nothing — no policy is applied at all |
+| No token a browser recognises | Same as absent | Nothing — no policy is applied at all |
+
+**The header is a list, and the last valid token wins.** W3C Referrer Policy §8.1
+walks every comma-separated token and keeps the last one that names a policy;
+empty and unknown tokens are **skipped**, not treated as errors. The spec's own
+note explains why the loop is there: so a site can write
+`no-referrer, strict-origin-when-cross-origin` and have an older browser take the
+first and a current one the second. A list is the recommended shape, not a
+mistake, and only the token that survives the walk is graded.
+
+Two consequences run in opposite directions. `bogus, no-referrer` is `no-referrer`
+and clean. `strict-origin-when-cross-origin, unsafe-url` is **`unsafe-url`** —
+naming a strong policy first protects nothing. Repeated headers are concatenated
+before the walk, so they take the same path: the last *valid* token wins, which is
+not always the last occurrence.
 
 Values are paired where they differ only in same-origin behaviour, which the
 grading ignores: `no-referrer` and `same-origin` disclose nothing outside the

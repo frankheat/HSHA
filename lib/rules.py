@@ -61,14 +61,13 @@ _ABSENCE_IS_CORRECT = {
 # ---------------------------------------------------------------------------
 # Duplicate-header resolution, mirroring real browser behavior:
 #   first     — first occurrence wins (default; e.g. HSTS per RFC 6797 §8.1)
-#   last      — last valid occurrence wins (Referrer-Policy per W3C spec)
 #   join      — occurrences combine into one value (RFC list headers; for CSP,
 #               multiple headers are all enforced, equivalent to joining with
 #               ','). Whether the combined value is still valid is the checker's
 #               business: COOP and COEP join into something no browser can parse.
 # ---------------------------------------------------------------------------
 _DUPLICATE_STRATEGIES: dict[str, str] = {
-    'referrer-policy':              'last',
+    'referrer-policy':              'join',
     'x-frame-options':              'join',
     'content-security-policy':      'join',
     'cache-control':                'join',
@@ -105,9 +104,6 @@ def _resolve_duplicates(
     elif identical:
         effective = values[0]
         behavior = "the duplicate values are identical"
-    elif strategy == 'last':
-        effective = values[-1]
-        behavior = "browsers honor the last valid value"
     else:
         effective = values[0]
         behavior = "browsers honor the first value"
@@ -1020,8 +1016,26 @@ def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:
     return findings
 
 
+_REFERRER_POLICIES = {
+    'no-referrer', 'no-referrer-when-downgrade', 'same-origin', 'origin',
+    'strict-origin', 'origin-when-cross-origin', 'strict-origin-when-cross-origin',
+    'unsafe-url',
+}
+
+
 def _check_referrer_policy(value: str, extra: dict) -> list[Finding]:
-    n = value.strip().lower()
+    # W3C Referrer Policy §8.1 walks every comma-separated token and keeps the last
+    # one that names a policy, skipping empty and unknown tokens rather than
+    # failing on them. The spec's own note says the loop is there so a site can
+    # write `no-referrer, strict-origin-when-cross-origin` and have old browsers
+    # take the first and new ones the second — so a list is the recommended shape,
+    # not a mistake, and only the token that survives it can be graded.
+    n = ''
+    for token in _split_outside_quotes(value, ','):
+        token = token.strip().lower()
+        if token in _REFERRER_POLICIES:
+            n = token
+
     # Graded on what reaches a third party, since that is the only recipient the
     # site does not already control: nothing, the origin alone, or the full URL.
     # What a policy sends on a same-origin request is not a criterion — that

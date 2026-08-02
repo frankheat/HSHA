@@ -85,6 +85,13 @@ CASES = [
     ("Referrer-Policy", "unsafe-url", Severity.HIGH),
     ("Referrer-Policy", "always", Severity.MEDIUM),  # legacy meta value, not a header token
     ("Referrer-Policy", "bogus", Severity.MEDIUM),   # same effect as sending no header
+    # §8.1 keeps the last valid token and skips the rest, which is what makes a
+    # list the recommended shape rather than a mistake.
+    ("Referrer-Policy", "no-referrer, strict-origin-when-cross-origin", Severity.OK),
+    ("Referrer-Policy", "bogus, no-referrer", Severity.OK),
+    ("Referrer-Policy", "no-referrer,", Severity.OK),
+    ("Referrer-Policy", "strict-origin-when-cross-origin, unsafe-url", Severity.HIGH),
+    ("Referrer-Policy", "unsafe-url, bogus", Severity.HIGH),
 
     # --- X-Permitted-Cross-Domain-Policies ---
     ("X-Permitted-Cross-Domain-Policies", "none", Severity.OK),
@@ -921,3 +928,37 @@ def test_frame_options_sameorigin_asks_whether_the_page_needs_framing():
     assert finding.is_contingent
     assert "DENY costs nothing" in finding.verify
     assert "every containing document" in finding.description   # as strong as 'self'
+
+
+# ---------------------------------------------------------------------------
+# Referrer-Policy: the last valid token wins, the rest are skipped
+# ---------------------------------------------------------------------------
+
+def test_referrer_policy_list_is_the_shape_the_spec_recommends():
+    """§8.1's own note: the loop exists so a site can name a new policy after an
+    older one and let each browser take the last it understands. Reporting that as
+    'no policy in force' flags the deployment the spec asks for."""
+    findings = findings_for("Referrer-Policy", "no-referrer, strict-origin-when-cross-origin")
+    assert findings[0].severity == Severity.OK
+    assert "strict-origin-when-cross-origin" in findings[0].title
+
+
+def test_referrer_policy_grades_the_token_that_survives_not_the_first():
+    """The dangerous direction: a weak token after a strong one is the one applied,
+    and calling the whole value unrecognised would report MEDIUM for a HIGH."""
+    assert severity_for("Referrer-Policy", "strict-origin-when-cross-origin, unsafe-url") \
+           == Severity.HIGH
+    assert has(findings_for("Referrer-Policy", "strict-origin-when-cross-origin, unsafe-url"),
+               "unsafe-url")
+
+
+@pytest.mark.parametrize("value", ["unsafe-url, bogus", "unsafe-url,", "unsafe-url, always"])
+def test_referrer_policy_unknown_and_empty_tokens_are_skipped_not_honoured(value):
+    """An unknown token does not clear the policy — it is passed over, so what a
+    browser applies is still the last one it recognised."""
+    assert severity_for("Referrer-Policy", value) == Severity.HIGH
+
+
+def test_referrer_policy_with_no_valid_token_at_all_is_still_absent():
+    absent = analyze("X-Nothing: x")['referrer-policy'].worst_severity
+    assert severity_for("Referrer-Policy", "bogus, nonsense") == absent
