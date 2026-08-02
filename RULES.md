@@ -314,6 +314,15 @@ just the directive and keep the rest — they discard the whole header. A respon
 carrying it is exactly as framable as one carrying nothing, with the difference
 that it looks like a policy is in force.
 
+**When the CSP gives the framing decision away.** The step above is unconditional:
+a browser stops reading `X-Frame-Options` as soon as an *enforced* policy carries a
+`frame-ancestors` directive, whatever that directive says. So `DENY` beside
+`frame-ancestors *` protects nothing but the browsers too old to implement CSP,
+and this header's own verdict, read alone, is reassurance the response has not
+earned. An INFO finding is added to say so. The exposure itself stays graded on
+the `Content-Security-Policy` row, once — a report-only policy does not trigger
+this, since the algorithm skips policies whose disposition is not "enforce".
+
 **Set this header even when the CSP already declares `frame-ancestors`.** The two
 overlap — CSP Level 3 §6.4.2.2 states that `frame-ancestors` *overrides* the
 `X-Frame-Options` header, and `'none'` and `'self'` are its equivalents of `DENY`

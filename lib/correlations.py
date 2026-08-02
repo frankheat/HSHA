@@ -17,6 +17,8 @@ from .models import Finding, HeaderResult, Severity
 
 _ACAO = 'access-control-allow-origin'
 _ACAC = 'access-control-allow-credentials'
+_CSP = 'content-security-policy'
+_XFO = 'x-frame-options'
 
 
 def _cors_credentials(results: dict[str, HeaderResult]) -> list[tuple[str, Finding]]:
@@ -120,8 +122,47 @@ def _cors_credentials(results: dict[str, HeaderResult]) -> list[tuple[str, Findi
     )
 
 
+def _frame_ancestors_replaces_x_frame_options(
+    results: dict[str, HeaderResult],
+) -> list[tuple[str, Finding]]:
+    """
+    Say so when the CSP has taken the framing decision away from X-Frame-Options
+    and given it away.
+
+    HTML's *check a navigation response's adherence to `X-Frame-Options`* returns
+    early — the header unread — as soon as an enforced policy carries a
+    frame-ancestors directive, whatever that directive says. So a correct
+    X-Frame-Options next to a permissive frame-ancestors protects nothing but the
+    browsers too old to implement CSP, and the header's own verdict, on its own,
+    reads as reassurance the response has not earned.
+
+    The exposure itself is already graded on the CSP; this only stops the other row
+    from showing a clean result. Nothing fires when frame-ancestors is restrictive:
+    that is the recommended pairing, one header covering what the other cannot.
+    """
+    xfo, csp = results.get(_XFO), results.get(_CSP)
+    if xfo is None or csp is None or not xfo.is_present:
+        return []
+    if not any(f.title == "Permissive frame-ancestors" for f in csp.findings):
+        return []
+    return [(_XFO, Finding(
+        header='X-Frame-Options',
+        severity=Severity.INFO,
+        title="X-Frame-Options: replaced by the CSP, which allows framing",
+        description="A browser that implements CSP frame-ancestors does not read this header "
+                    "at all — the directive's presence replaces it, whatever its value. Here it "
+                    "is permissive, so the page can be framed by anyone, and this header "
+                    "protects only browsers old enough to ignore CSP entirely. The exposure is "
+                    "graded on the Content-Security-Policy row; what is said here is that this "
+                    "one does not offset it.",
+        recommendation="Restrict frame-ancestors, and keep this header for the browsers that "
+                       "do not implement it.",
+    ))]
+
+
 _CORRELATIONS: list[Callable[[dict[str, HeaderResult]], list[tuple[str, Finding]]]] = [
     _cors_credentials,
+    _frame_ancestors_replaces_x_frame_options,
 ]
 
 

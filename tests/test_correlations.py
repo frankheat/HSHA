@@ -136,3 +136,53 @@ def test_credentials_are_moot_when_the_origin_list_is_invalid():
     result = cors("https://a.example.com, https://b.example.com")
     assert result.worst_severity == Severity.INFO
     assert has(result.findings, "not usable")
+
+
+# ---------------------------------------------------------------------------
+# frame-ancestors takes the framing decision away from X-Frame-Options
+# ---------------------------------------------------------------------------
+
+CSP = "Content-Security-Policy"
+XFO = "X-Frame-Options"
+
+
+def framing(xfo: str | None, frame_ancestors: str | None):
+    lines = []
+    if xfo is not None:
+        lines.append(f"{XFO}: {xfo}")
+    if frame_ancestors is not None:
+        lines.append(f"{CSP}: default-src 'self'; frame-ancestors {frame_ancestors}")
+    return analyze(*lines or ["X-Nothing: x"])['x-frame-options']
+
+
+def test_a_permissive_frame_ancestors_stops_x_frame_options_reading_as_clean():
+    """HTML returns early, the header unread, as soon as an enforced policy carries
+    a frame-ancestors directive — so DENY beside `frame-ancestors *` protects only
+    browsers too old to implement CSP, and the row must not show a clean result."""
+    result = framing("DENY", "*")
+    assert result.worst_severity == Severity.INFO
+    assert has(result.findings, "replaced by the CSP, which allows framing")
+
+
+def test_a_restrictive_frame_ancestors_says_nothing_extra():
+    """CSP covering modern browsers and X-Frame-Options covering the rest is the
+    pairing to aim for; there is nothing to report about it."""
+    for sources in ("'none'", "'self'"):
+        result = framing("DENY", sources)
+        assert result.worst_severity == Severity.OK
+        assert not has(result.findings, "replaced by the CSP")
+
+
+def test_the_exposure_is_not_graded_twice():
+    """The CSP row carries it. This one only removes the reassurance, so it must
+    stay below the level that would read as a second problem."""
+    results = analyze(f"{XFO}: DENY", f"{CSP}: default-src 'self'; frame-ancestors *")
+    assert results['content-security-policy'].worst_severity == Severity.HIGH
+    assert results['x-frame-options'].worst_severity == Severity.INFO
+
+
+def test_nothing_is_said_when_x_frame_options_is_absent():
+    """Then there is no clean verdict to correct, and the missing header is already
+    reported on its own row."""
+    result = framing(None, "*")
+    assert not has(result.findings, "replaced by the CSP")
