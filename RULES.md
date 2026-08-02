@@ -273,8 +273,23 @@ Strict-Transport-Security:
 |---|---|---|
 | `DENY` | OK | Optimal — prevents all framing |
 | `SAMEORIGIN` | OK | Acceptable — allows framing by same origin only |
-| `ALLOW-FROM ...` | LOW | Deprecated and not supported by modern browsers |
-| Any other value | MEDIUM | Unrecognized value; header is effectively ignored |
+| `ALLOW-FROM ...`, or anything else | Same as absent | No browser applies either, so the page is framable — see below |
+
+**Why an unusable value is graded like no header at all.** A browser applies this
+header for `DENY` and `SAMEORIGIN` and nothing else. `ALLOW-FROM` is the case
+worth spelling out: no current browser implements it, and none of them ignore
+just the directive and keep the rest — they discard the whole header. A response
+carrying it is exactly as framable as one carrying nothing, with the difference
+that it looks like a policy is in force.
+
+**Set this header even when the CSP already declares `frame-ancestors`.** The two
+overlap — CSP Level 3 §6.4.2.2 states that `frame-ancestors` *overrides* the
+`X-Frame-Options` header, and `'none'` and `'self'` are its equivalents of `DENY`
+and `SAMEORIGIN` — but the overlap is only in browsers that implement CSP
+`frame-ancestors`. Older ones, IE11 among them, implement none of it and take
+`X-Frame-Options` as the only instruction they will get. So a response carrying
+only the CSP directive is reported as missing this header, and that is not a
+false alarm: it names the browsers left uncovered.
 
 ---
 

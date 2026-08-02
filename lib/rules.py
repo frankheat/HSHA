@@ -565,19 +565,28 @@ def _check_x_frame_options(value: str, extra: dict) -> list[Finding]:
         return [Finding('X-Frame-Options', Severity.OK, "X-Frame-Options: DENY (optimal)")]
     if n == 'SAMEORIGIN':
         return [Finding('X-Frame-Options', Severity.OK, "X-Frame-Options: SAMEORIGIN (acceptable)")]
+    # Both branches leave the page framable, which is where a response with no
+    # header already is, so both carry that severity. ALLOW-FROM is the one that
+    # looks like a policy: a browser does not ignore the directive and keep the
+    # rest, it ignores the header.
     if n.startswith('ALLOW-FROM'):
         return [Finding(
             header='X-Frame-Options',
-            severity=Severity.LOW,
-            title="X-Frame-Options: ALLOW-FROM is deprecated",
-            description="ALLOW-FROM is not supported in modern browsers.",
-            recommendation="Use Content-Security-Policy: frame-ancestors <allowed_origins> instead.",
+            severity=extra.get(ABSENT_SEVERITY, Severity.HIGH),
+            title="X-Frame-Options: ALLOW-FROM leaves the page framable by anyone",
+            description="No current browser implements ALLOW-FROM, and none of them ignore just "
+                        "the directive: they discard the whole header. The page is in the same "
+                        "position as one that never sent it, while the header suggests a policy "
+                        "is in force.",
+            recommendation="Set X-Frame-Options: DENY or SAMEORIGIN, and name the permitted "
+                           "origins in Content-Security-Policy: frame-ancestors.",
         )]
     return [Finding(
         header='X-Frame-Options',
-        severity=Severity.MEDIUM,
-        title=f"X-Frame-Options: unrecognized value '{value}'",
-        description="Valid values: DENY, SAMEORIGIN.",
+        severity=extra.get(ABSENT_SEVERITY, Severity.HIGH),
+        title=f"X-Frame-Options: '{value}' leaves the page framable by anyone",
+        description="A browser applies this header only for DENY and SAMEORIGIN. Anything else "
+                    "it cannot use, so framing is allowed exactly as if the header were absent.",
         recommendation="Set X-Frame-Options: DENY",
     )]
 

@@ -24,8 +24,10 @@ CASES = [
     ("X-Frame-Options", "DENY", Severity.OK),
     ("X-Frame-Options", "deny", Severity.OK),
     ("X-Frame-Options", "SAMEORIGIN", Severity.OK),
-    ("X-Frame-Options", "ALLOW-FROM https://example.com", Severity.LOW),
-    ("X-Frame-Options", "ALLOWALL", Severity.MEDIUM),
+    # Neither is applied by any browser, so both leave the page where an absent
+    # header leaves it.
+    ("X-Frame-Options", "ALLOW-FROM https://example.com", Severity.HIGH),
+    ("X-Frame-Options", "ALLOWALL", Severity.HIGH),
 
     # --- X-Content-Type-Options ---
     ("X-Content-Type-Options", "nosniff", Severity.OK),
@@ -863,3 +865,20 @@ def test_nosniff_finding_says_what_is_left_on():
     finding = findings_for("X-Content-Type-Options", "sniff")[0]
     assert "leaves MIME sniffing on" in finding.title
     assert "uploaded" in finding.description
+
+
+@pytest.mark.parametrize("value", ["ALLOW-FROM https://partner.example", "ALLOWALL", "bogus"])
+def test_a_frame_options_value_no_browser_applies_weighs_the_same_as_an_absent_header(value):
+    """ALLOW-FROM is the one that misleads: a browser does not ignore the directive
+    and keep the header, it discards the header — so the page is framable while the
+    response looks like it has a policy."""
+    absent = analyze("X-Nothing: x")['x-frame-options'].worst_severity
+    findings = findings_for("X-Frame-Options", value)
+    assert findings[0].severity == absent
+    assert "framable by anyone" in findings[0].title
+
+
+def test_frame_options_unusable_value_follows_a_config_override():
+    from lib.config import AppConfig, HeaderOverride
+    config = AppConfig(overrides={'x-frame-options': HeaderOverride(severity_if_missing='medium')})
+    assert severity_for("X-Frame-Options", "ALLOWALL", config) == Severity.MEDIUM
