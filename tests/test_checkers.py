@@ -768,3 +768,25 @@ def test_coop_unusable_value_follows_a_config_override():
     })
     assert analyze("X-Nothing: x", config=config)['cross-origin-opener-policy'].worst_severity == Severity.HIGH
     assert severity_for("Cross-Origin-Opener-Policy", "bogus", config) == Severity.HIGH
+
+
+@pytest.mark.parametrize("value", ["max-age=0", "max-age=0; includeSubDomains"])
+def test_hsts_max_age_zero_is_the_only_verdict(value):
+    """The entry is deleted, so there is no policy left for the other directives to
+    qualify — advising includeSubDomains on top would be advice about nothing."""
+    findings = findings_for("Strict-Transport-Security", value)
+    assert len(findings) == 1
+    assert has(findings, "revokes HSTS protection")
+
+
+def test_hsts_max_age_zero_weighs_the_same_as_an_absent_header():
+    """Both leave the site with no HSTS, so both track whatever the profile says
+    an absent one is worth."""
+    absent = analyze("X-Nothing: x")['strict-transport-security'].worst_severity
+    assert severity_for("Strict-Transport-Security", "max-age=0") == absent
+
+    from lib.config import AppConfig, HeaderOverride
+    config = AppConfig(overrides={
+        'strict-transport-security': HeaderOverride(severity_if_missing='medium'),
+    })
+    assert severity_for("Strict-Transport-Security", "max-age=0", config) == Severity.MEDIUM

@@ -208,7 +208,7 @@ effective policy is their intersection. Findings combine as follows:
 | Condition | Severity | Rationale |
 |---|---|---|
 | Header does not conform to RFC 6797 §6.1 | Same as absent | A browser ignores such a header in full, so the site has no HSTS at all. Covers a missing or non-numeric `max-age`, a directive repeated (`max-age=1; max-age=2`), and `includeSubDomains` or `preload` given a value. The value may be quoted (`max-age="31536000"`), which the RFC allows |
-| `max-age=0` | HIGH | Explicitly revokes HSTS — browsers delete the entry |
+| `max-age=0` | Same as absent | Browsers delete the entry, so the site has no HSTS. It is the documented way to turn HSTS off, so it may be deliberate; either way the other directives are not reported, since there is no policy left for them to qualify |
 | `max-age` < threshold *(default: 31536000s / 1 year)* | MEDIUM | Short values reduce protection window against SSL-stripping |
 | `includeSubDomains` missing *(configurable)* | LOW | Subdomains remain vulnerable to SSL-stripping attacks |
 | `preload` missing *(extended profile only)* | LOW | Site cannot be submitted to browser HSTS preload lists |

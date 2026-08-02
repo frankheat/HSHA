@@ -469,15 +469,22 @@ def _check_hsts(value: str, extra: dict) -> list[Finding]:
             f"Invalid min_max_age '{extra.get('min_max_age')}' in config: must be an integer (seconds)."
         )
 
+    # Returns rather than falls through: with the entry deleted there is no policy
+    # left for the other directives to qualify, and telling a site whose HSTS is
+    # switched off to also add includeSubDomains is advice about nothing.
     if max_age == 0:
-        findings.append(Finding(
+        return [Finding(
             header='Strict-Transport-Security',
-            severity=Severity.HIGH,
+            severity=extra.get(ABSENT_SEVERITY, Severity.HIGH),
             title="HSTS: max-age=0 revokes HSTS protection",
-            description="Setting max-age=0 instructs browsers to delete the HSTS entry.",
+            description="max-age=0 instructs browsers to delete the HSTS entry, so this site "
+                        "has no HSTS — the same position as never sending the header, and worse "
+                        "for a visitor who had the entry already. It is the documented way to "
+                        "turn HSTS off, so it may well be deliberate.",
             recommendation="Set max-age to at least 31536000 (1 year).",
-        ))
-    elif max_age < min_age:
+        )]
+
+    if max_age < min_age:
         findings.append(Finding(
             header='Strict-Transport-Security',
             severity=Severity.MEDIUM,
