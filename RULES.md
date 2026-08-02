@@ -211,7 +211,7 @@ effective policy is their intersection. Findings combine as follows:
 | `max-age=0` | Same as absent | Browsers delete the entry, so the site has no HSTS. It is the documented way to turn HSTS off, so it may be deliberate; either way the other directives are not reported, since there is no policy left for them to qualify |
 | `max-age` < threshold *(default: 31536000s / 1 year)* | MEDIUM | Short values reduce protection window against SSL-stripping |
 | `includeSubDomains` missing *(configurable)* | LOW | Subdomains remain vulnerable to SSL-stripping attacks |
-| `preload` missing *(extended profile only)* | LOW | Site cannot be submitted to browser HSTS preload lists |
+| `preload`, declared or not *(extended profile only)* | ? LOW | Whether the domain is on the preload list is a separate fact the response cannot show — see below |
 
 Directive names are matched as names, not searched for in the value. A
 misspelling such as `includeSubDomainss`, or the word appearing inside another
@@ -221,8 +221,22 @@ the asymmetry the RFC draws: an *unrecognised* directive is skipped and the rest
 of the header still applies, but a *recognised* one used wrongly — repeated, or
 given a value it must not have — invalidates the whole header.
 
-`preload` is not defined by RFC 6797. It is a convention for submission to the
-browser preload lists, checked only when a profile asks for it.
+**`preload` is graded either way, and neither way is settled by the response.**
+It is not defined by RFC 6797: it is what a domain must send to be *accepted* onto
+the browser preload lists, not what puts it there. Submission at
+`hstspreload.org` is a separate step, and it can be refused or reversed.
+
+So a header carrying `preload` proves nothing, and one without it may belong to a
+domain that is listed anyway. Both are reported at the same level, because if the
+domain is not on the list they leave the site in the same place: carrying the one
+gap HSTS cannot close on its own — the first request to the domain, made before
+the browser has ever seen the site, goes out over plain HTTP and can be stripped
+by anyone on the network path.
+
+One lookup settles both. Declining to preload is also a reasonable decision — it
+is hard to undo and covers every subdomain — which is a fact to record rather than
+a defect to report, and is why the finding asks rather than tells. The check runs
+only when a profile opts in.
 
 Threshold values are configurable in the profile:
 ```yaml

@@ -502,14 +502,39 @@ def _check_hsts(value: str, extra: dict) -> list[Finding]:
             recommendation="Add includeSubDomains directive.",
         ))
 
-    if extra.get('require_preload', False) and 'preload' not in directives:
-        findings.append(Finding(
-            header='Strict-Transport-Security',
-            severity=Severity.LOW,
-            title="HSTS: missing preload",
-            description="Without preload, the site is not eligible for browser HSTS preload lists.",
-            recommendation="Add preload directive and submit to https://hstspreload.org",
-        ))
+    # Both branches are graded, and both are contingent on the same fact: the token
+    # is a declaration of intent, and membership of the list is a separate step the
+    # response cannot show. Absent or merely declared, if the domain is not listed
+    # the site is in the same place — carrying the trust-on-first-use gap.
+    if extra.get('require_preload', False):
+        listed = ("Is the domain on the preload list? Check hstspreload.org. If it is, there "
+                  "is nothing here. If it is not, ")
+        if 'preload' not in directives:
+            findings.append(Finding(
+                header='Strict-Transport-Security',
+                severity=Severity.LOW,
+                title="HSTS: preload is not declared",
+                description="Preloading is what closes the one gap HSTS cannot close on its own: "
+                            "the first request to this domain, made before the browser has ever "
+                            "seen the site, goes out over plain HTTP and can be stripped by "
+                            "anyone on the network path.",
+                verify=listed + "this stands. Preloading is also hard to undo and covers every "
+                       "subdomain, so a site may have declined it deliberately — that is a "
+                       "decision to record, not a defect to report.",
+            ))
+        else:
+            findings.append(Finding(
+                header='Strict-Transport-Security',
+                severity=Severity.LOW,
+                title="HSTS: preload is declared, which is not the same as being on the list",
+                description="The token is what a domain must send to be accepted, not what puts "
+                            "it there: submission at hstspreload.org is a separate step, and it "
+                            "can be refused or reversed. A domain can carry this token for years "
+                            "without ever being listed.",
+                verify=listed + "the first-visit protection this header looks like it provides "
+                       "does not exist, and the site is exactly where it would be without the "
+                       "token.",
+            ))
 
     if not findings:
         findings.append(Finding(

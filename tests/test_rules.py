@@ -212,7 +212,7 @@ def test_extended_profile_requires_hsts_preload():
     from conftest import profile
     findings = findings_for("Strict-Transport-Security",
                             "max-age=31536000; includeSubDomains", profile('extended'))
-    assert has(findings, "missing preload")
+    assert has(findings, "preload is not declared")
 
 
 # ---------------------------------------------------------------------------

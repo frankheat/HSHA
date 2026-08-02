@@ -204,7 +204,9 @@ def test_hsts_min_max_age_is_configurable():
                         "max-age=600; includeSubDomains", config) == Severity.OK
 
 
-def test_hsts_require_preload_is_off_by_default_and_configurable():
+def test_hsts_preload_is_not_asked_about_unless_a_profile_asks():
+    """preload is not defined by RFC 6797 — it is a submission convention, so the
+    tool says nothing about it until a profile opts in."""
     from lib.config import AppConfig, HeaderOverride
     value = "max-age=31536000; includeSubDomains"
     assert severity_for("Strict-Transport-Security", value) == Severity.OK
@@ -212,7 +214,26 @@ def test_hsts_require_preload_is_off_by_default_and_configurable():
     config = AppConfig(overrides={
         'strict-transport-security': HeaderOverride(extra={'require_preload': True}),
     })
-    assert has(findings_for("Strict-Transport-Security", value, config), "missing preload")
+    assert has(findings_for("Strict-Transport-Security", value, config), "preload is not declared")
+
+
+@pytest.mark.parametrize("value,title", [
+    ("max-age=31536000; includeSubDomains", "preload is not declared"),
+    ("max-age=31536000; includeSubDomains; preload", "not the same as being on the list"),
+])
+def test_hsts_preload_is_contingent_either_way(value, title):
+    """The token is a declaration of intent; membership of the list is a separate
+    step the response cannot show. Whichever way the header reads, the same lookup
+    settles it — and if the domain is not listed, both land in the same place."""
+    from lib.config import AppConfig, HeaderOverride
+    config = AppConfig(overrides={
+        'strict-transport-security': HeaderOverride(extra={'require_preload': True}),
+    })
+    finding = next(f for f in findings_for("Strict-Transport-Security", value, config)
+                   if 'preload' in f.title)
+    assert finding.severity == Severity.LOW
+    assert finding.is_contingent
+    assert "hstspreload.org" in finding.verify
 
 
 def test_hsts_rejects_non_integer_min_max_age():
