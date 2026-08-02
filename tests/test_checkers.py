@@ -15,7 +15,7 @@ CASES = [
     ("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload", Severity.OK),
     ("Strict-Transport-Security", "MAX-AGE=31536000; INCLUDESUBDOMAINS", Severity.OK),
     ("Strict-Transport-Security", "max-age = 31536000; includeSubDomains", Severity.OK),
-    ("Strict-Transport-Security", "max-age=31536000", Severity.LOW),
+    ("Strict-Transport-Security", "max-age=31536000", Severity.MEDIUM),
     ("Strict-Transport-Security", "max-age=300; includeSubDomains", Severity.MEDIUM),
     ("Strict-Transport-Security", "max-age=0; includeSubDomains", Severity.HIGH),
     ("Strict-Transport-Security", "includeSubDomains", Severity.HIGH),
@@ -811,3 +811,14 @@ def test_hsts_max_age_zero_weighs_the_same_as_an_absent_header():
         'strict-transport-security': HeaderOverride(severity_if_missing='medium'),
     })
     assert severity_for("Strict-Transport-Security", "max-age=0", config) == Severity.MEDIUM
+
+
+def test_hsts_missing_include_subdomains_does_not_depend_on_having_subdomains():
+    """The attacker picks the name, so a site with none is not exempt — the text has
+    to say so, or a reader concludes the finding is not about them."""
+    finding = next(f for f in findings_for("Strict-Transport-Security", "max-age=31536000")
+                   if "includeSubDomains" in f.title)
+    assert finding.severity == Severity.MEDIUM
+    assert not finding.is_contingent
+    assert "no subdomains at all is not exempt" in finding.description
+    assert "Domain=example.com" in finding.description      # names the mechanism

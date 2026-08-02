@@ -210,8 +210,25 @@ effective policy is their intersection. Findings combine as follows:
 | Header does not conform to RFC 6797 §6.1 | Same as absent | A browser ignores such a header in full, so the site has no HSTS at all. Covers a missing or non-numeric `max-age`, a directive repeated (`max-age=1; max-age=2`), and `includeSubDomains` or `preload` given a value. The value may be quoted (`max-age="31536000"`), which the RFC allows |
 | `max-age=0` | Same as absent | Browsers delete the entry, so the site has no HSTS. It is the documented way to turn HSTS off, so it may be deliberate; either way the other directives are not reported, since there is no policy left for them to qualify |
 | `max-age` < threshold *(default: 31536000s / 1 year)* | MEDIUM | Short values reduce protection window against SSL-stripping |
-| `includeSubDomains` missing *(configurable)* | LOW | Subdomains remain vulnerable to SSL-stripping attacks |
+| `includeSubDomains` missing *(configurable)* | MEDIUM | A plaintext channel on any host under the domain reaches the protected site's cookies — see below |
 | `preload`, declared or not *(extended profile only)* | ? LOW | Whether the domain is on the preload list is a separate fact the response cannot show — see below |
+
+**Why a missing `includeSubDomains` does not depend on having subdomains.** The
+reading it invites — *we have none, so it does not apply to us* — is the wrong
+one, and it is why this is graded above a remark.
+
+HSTS covers the host that sent it. A host that does not exist is not covered
+either, and the attacker is the one who picks the name. With network position they
+answer for `anything.example.com` over plain HTTP, and from that origin they set
+cookies with `Domain=example.com`, which the browser then sends to the protected
+site. Cookies are scoped by domain, not by origin, which is what carries the
+attack across. Browsers no longer allow such an origin to overwrite an existing
+`Secure` cookie, but injecting a new one — session fixation — or shadowing one on
+another path still works, and the same channel serves a convincing page on a
+plausible hostname.
+
+It sits below the severity of a missing header because the protected host itself
+stays protected: what is reachable is the domain around it.
 
 Directive names are matched as names, not searched for in the value. A
 misspelling such as `includeSubDomainss`, or the word appearing inside another

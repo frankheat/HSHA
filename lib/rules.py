@@ -493,13 +493,25 @@ def _check_hsts(value: str, extra: dict) -> list[Finding]:
             recommendation=f"Set max-age to at least {min_age}.",
         ))
 
+    # Not contingent on the site having subdomains: the attacker supplies the name.
+    # What makes it work is that cookies are scoped by domain and not by origin, so
+    # a plaintext channel on any host under the registrable domain reaches the
+    # cookie jar of the protected one.
     if extra.get('require_include_subdomains', True) and 'includesubdomains' not in directives:
         findings.append(Finding(
             header='Strict-Transport-Security',
-            severity=Severity.LOW,
+            severity=Severity.MEDIUM,
             title="HSTS: missing includeSubDomains",
-            description="Without includeSubDomains, subdomains remain vulnerable to SSL-stripping attacks.",
-            recommendation="Add includeSubDomains directive.",
+            description="HSTS covers this host and nothing else, and a host that does not exist "
+                        "is not covered either. An attacker on the network path can answer for "
+                        "anything.example.com over plain HTTP, and from there set cookies with "
+                        "Domain=example.com — which the browser then sends to the protected site. "
+                        "Browsers no longer let such an origin overwrite an existing Secure "
+                        "cookie, but injecting one, or shadowing it on another path, still works. "
+                        "A site with no subdomains at all is not exempt: the name is the "
+                        "attacker's to choose.",
+            recommendation="Add includeSubDomains, once every host under the domain is served "
+                           "over HTTPS.",
         ))
 
     # Both branches are graded, and both are contingent on the same fact: the token
