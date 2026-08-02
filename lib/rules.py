@@ -66,11 +66,10 @@ _ABSENCE_IS_CORRECT = {
 #               multiple headers are all enforced, equivalent to joining with
 #               ','). Whether the combined value is still valid is the checker's
 #               business: COOP and COEP join into something no browser can parse.
-#   strictest — conflicting values make browsers block framing (X-Frame-Options)
 # ---------------------------------------------------------------------------
 _DUPLICATE_STRATEGIES: dict[str, str] = {
     'referrer-policy':              'last',
-    'x-frame-options':              'strictest',
+    'x-frame-options':              'join',
     'content-security-policy':      'join',
     'cache-control':                'join',
     'clear-site-data':              'join',
@@ -109,9 +108,6 @@ def _resolve_duplicates(
     elif strategy == 'last':
         effective = values[-1]
         behavior = "browsers honor the last valid value"
-    elif strategy == 'strictest':
-        effective = 'DENY'
-        behavior = "browsers block framing when the values conflict"
     else:
         effective = values[0]
         behavior = "browsers honor the first value"
@@ -560,16 +556,63 @@ def _check_hsts(value: str, extra: dict) -> list[Finding]:
 
 
 def _check_x_frame_options(value: str, extra: dict) -> list[Finding]:
-    n = value.strip().upper()
-    if n == 'DENY':
+    """
+    HTML's *check a navigation response's adherence to `X-Frame-Options`* works on
+    a **set** of lowercased values, which is why repeating a value is harmless and
+    mixing values is not a fallback: if the set holds more than one entry and any
+    of them is usable, the browser blocks — "any attempts at applying
+    X-Frame-Options which were trying to do something valid, but appear confused".
+    Only when every entry is unusable does framing go ahead.
+    """
+    values = {v.strip().lower()
+              for v in _split_outside_quotes(value, ',', keep_empty=True)}
+    usable = values & {'deny', 'allowall', 'sameorigin'}
+
+    if len(values) > 1:
+        if usable:
+            return [Finding(
+                header='X-Frame-Options',
+                severity=Severity.LOW,
+                title=f"X-Frame-Options: '{value}' blocks framing by contradicting itself",
+                description="More than one value is given, and at least one is usable, so a "
+                            "browser refuses the frame rather than guess which was meant. The "
+                            "page is not framable — but by the contradiction, not by a decision, "
+                            "and whichever component set the value that is being ignored is "
+                            "working on a false assumption.",
+                recommendation="Send X-Frame-Options once, with DENY.",
+            )]
+        return [Finding(
+            header='X-Frame-Options',
+            severity=extra.get(ABSENT_SEVERITY, Severity.HIGH),
+            title=f"X-Frame-Options: '{value}' leaves the page framable by anyone",
+            description="Several values are given and none of them is one a browser applies, "
+                        "so the header is treated as if it had been omitted.",
+            recommendation="Set X-Frame-Options: DENY",
+        )]
+
+    only = next(iter(values))
+    if only == 'deny':
         return [Finding('X-Frame-Options', Severity.OK, "X-Frame-Options: DENY (optimal)")]
-    if n == 'SAMEORIGIN':
-        return [Finding('X-Frame-Options', Severity.OK, "X-Frame-Options: SAMEORIGIN (acceptable)")]
-    # Both branches leave the page framable, which is where a response with no
-    # header already is, so both carry that severity. ALLOW-FROM is the one that
-    # looks like a policy: a browser does not ignore the directive and keep the
-    # rest, it ignores the header.
-    if n.startswith('ALLOW-FROM'):
+
+    if only == 'sameorigin':
+        return [Finding(
+            header='X-Frame-Options',
+            severity=Severity.LOW,
+            title="X-Frame-Options: SAMEORIGIN lets another page on this origin frame it",
+            description="A browser walks every containing document and refuses the frame as "
+                        "soon as one is cross-origin, so this is as strong as frame-ancestors "
+                        "'self'. What it still permits is a page on this same origin. That "
+                        "matters where an attacker can put markup on one — a stored HTML "
+                        "injection that a CSP stops short of script execution, say: they cannot "
+                        "read anything through it, but they can frame this page and overlay it, "
+                        "which DENY would have prevented outright.",
+            verify="Does another page on this origin need to frame this one — an admin console, "
+                   "a preview pane, an embedded editor? If one does, this stands and the "
+                   "exposure is the price of the feature. If none does, DENY costs nothing and "
+                   "closes it.",
+        )]
+
+    if only.startswith('allow-from'):
         return [Finding(
             header='X-Frame-Options',
             severity=extra.get(ABSENT_SEVERITY, Severity.HIGH),
@@ -578,15 +621,17 @@ def _check_x_frame_options(value: str, extra: dict) -> list[Finding]:
                         "the directive: they discard the whole header. The page is in the same "
                         "position as one that never sent it, while the header suggests a policy "
                         "is in force.",
-            recommendation="Set X-Frame-Options: DENY or SAMEORIGIN, and name the permitted "
-                           "origins in Content-Security-Policy: frame-ancestors.",
+            recommendation="Set X-Frame-Options: DENY, and name the permitted origins in "
+                           "Content-Security-Policy: frame-ancestors.",
         )]
+
     return [Finding(
         header='X-Frame-Options',
         severity=extra.get(ABSENT_SEVERITY, Severity.HIGH),
         title=f"X-Frame-Options: '{value}' leaves the page framable by anyone",
-        description="A browser applies this header only for DENY and SAMEORIGIN. Anything else "
-                    "it cannot use, so framing is allowed exactly as if the header were absent.",
+        description="A browser applies this header for DENY and SAMEORIGIN and nothing else. "
+                    "Anything else it cannot use, so framing is allowed exactly as if the "
+                    "header were absent.",
         recommendation="Set X-Frame-Options: DENY",
     )]
 

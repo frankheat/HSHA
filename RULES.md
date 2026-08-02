@@ -271,9 +271,36 @@ Strict-Transport-Security:
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `DENY` | OK | Optimal — prevents all framing |
-| `SAMEORIGIN` | OK | Acceptable — allows framing by same origin only |
+| `DENY` | OK | Nothing can frame the page |
+| `SAMEORIGIN` | ? LOW | Another page on this origin can still frame it — see below |
+| More than one value, at least one usable | LOW | The browser refuses the frame rather than guess, so framing is blocked by the contradiction rather than by a decision |
 | `ALLOW-FROM ...`, or anything else | Same as absent | No browser applies either, so the page is framable — see below |
+
+**The values are read as a set.** HTML's *check a navigation response's adherence
+to `X-Frame-Options`* lowercases each comma-separated value into a set, and then:
+if the set holds more than one entry **and** any of them is `deny`, `allowall` or
+`sameorigin`, the frame is refused — *"any attempts at applying X-Frame-Options
+which were trying to do something valid, but appear confused"*. Only when every
+entry is unusable does framing go ahead. Two consequences:
+
+- `DENY, DENY` is one entry, and blocks. Repeating the value — which is what a
+  proxy appending to the header produces — changes nothing.
+- `DENY, SAMEORIGIN` blocks too, and so does `SAMEORIGIN, anything`. The header
+  contradicting itself is safe, and is reported because the outcome is an accident
+  of the contradiction: whichever component set the ignored value is working on a
+  false assumption.
+
+Repeated headers are joined with a comma before that split, so they take the same
+path — including two unusable values, which leave the page framable.
+
+**Why `SAMEORIGIN` is not graded as clean.** A browser walks *every* containing
+document and refuses as soon as one is cross-origin, so it is as strong as
+`frame-ancestors 'self'`. What it still permits is a page on this same origin. It
+costs something where an attacker can put markup on one and not run script there —
+a stored HTML injection on an origin whose CSP stops short of script execution:
+they cannot read anything through the frame, but they can overlay it, which `DENY`
+would have prevented outright. Whether that is worth anything depends on whether
+some page here needs to frame this one, which the response cannot say.
 
 **Why an unusable value is graded like no header at all.** A browser applies this
 header for `DENY` and `SAMEORIGIN` and nothing else. `ALLOW-FROM` is the case

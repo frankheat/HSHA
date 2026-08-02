@@ -23,11 +23,17 @@ CASES = [
     # --- X-Frame-Options ---
     ("X-Frame-Options", "DENY", Severity.OK),
     ("X-Frame-Options", "deny", Severity.OK),
-    ("X-Frame-Options", "SAMEORIGIN", Severity.OK),
+    ("X-Frame-Options", "SAMEORIGIN", Severity.LOW),   # weaker than DENY, contingent
     # Neither is applied by any browser, so both leave the page where an absent
     # header leaves it.
     ("X-Frame-Options", "ALLOW-FROM https://example.com", Severity.HIGH),
     ("X-Frame-Options", "ALLOWALL", Severity.HIGH),
+    # The browser works on a set: repeats collapse, and a mixture that still holds
+    # a usable value blocks rather than falling back.
+    ("X-Frame-Options", "DENY, DENY", Severity.OK),
+    ("X-Frame-Options", "DENY, SAMEORIGIN", Severity.LOW),
+    ("X-Frame-Options", "SAMEORIGIN, bogus", Severity.LOW),
+    ("X-Frame-Options", "bogus, garbage", Severity.HIGH),
 
     # --- X-Content-Type-Options ---
     ("X-Content-Type-Options", "nosniff", Severity.OK),
@@ -882,3 +888,26 @@ def test_frame_options_unusable_value_follows_a_config_override():
     from lib.config import AppConfig, HeaderOverride
     config = AppConfig(overrides={'x-frame-options': HeaderOverride(severity_if_missing='medium')})
     assert severity_for("X-Frame-Options", "ALLOWALL", config) == Severity.MEDIUM
+
+
+def test_frame_options_repeated_value_is_still_a_deny():
+    """The values go into a set, so DENY twice is one entry and blocks — reporting
+    a framable page would be the false alarm."""
+    assert severity_for("X-Frame-Options", "DENY, DENY") == Severity.OK
+
+
+@pytest.mark.parametrize("value", ["DENY, SAMEORIGIN", "SAMEORIGIN, bogus", "ALLOWALL, DENY"])
+def test_frame_options_contradiction_blocks_but_is_reported(value):
+    """A browser refuses the frame rather than guess, so the page is not framable —
+    but by the contradiction, not by a decision."""
+    findings = findings_for("X-Frame-Options", value)
+    assert findings[0].severity == Severity.LOW
+    assert "contradicting itself" in findings[0].title
+
+
+def test_frame_options_sameorigin_asks_whether_the_page_needs_framing():
+    finding = findings_for("X-Frame-Options", "SAMEORIGIN")[0]
+    assert finding.severity == Severity.LOW
+    assert finding.is_contingent
+    assert "DENY costs nothing" in finding.verify
+    assert "every containing document" in finding.description   # as strong as 'self'

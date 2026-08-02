@@ -11,7 +11,7 @@ import pytest
 
 from lib.models import Severity
 
-from conftest import analyze
+from conftest import analyze, has
 
 
 def duplicate_finding(result):
@@ -31,20 +31,21 @@ def test_single_occurrence_produces_no_duplicate_finding():
 # ---------------------------------------------------------------------------
 
 def test_identical_duplicates_collapse_to_one_value():
-    result = analyze("X-Frame-Options: DENY", "X-Frame-Options: DENY")['x-frame-options']
-    assert result.value == "DENY"
+    result = analyze("Referrer-Policy: no-referrer", "Referrer-Policy: no-referrer")['referrer-policy']
+    assert result.value == "no-referrer"
     finding = duplicate_finding(result)
     assert finding.severity == Severity.NOTE
     assert "identical" in finding.description
 
 
 def test_identical_duplicates_ignore_case_and_padding():
-    result = analyze("X-Frame-Options: DENY", "X-Frame-Options:   deny  ")['x-frame-options']
+    result = analyze("Referrer-Policy: no-referrer",
+                     "Referrer-Policy:   NO-REFERRER  ")['referrer-policy']
     assert duplicate_finding(result).severity == Severity.NOTE
 
 
 def test_identical_duplicates_do_not_make_a_header_fail():
-    result = analyze("X-Frame-Options: DENY", "X-Frame-Options: DENY")['x-frame-options']
+    result = analyze("Referrer-Policy: no-referrer", "Referrer-Policy: no-referrer")['referrer-policy']
     assert result.worst_severity == Severity.NOTE
     assert Severity.NOTE < Severity.INFO      # below the issue threshold
 
@@ -56,7 +57,6 @@ def test_identical_duplicates_do_not_make_a_header_fail():
 @pytest.mark.parametrize("header,key,first,second", [
     ("Strict-Transport-Security", 'strict-transport-security', "max-age=31536000", "max-age=600"),
     ("Referrer-Policy", 'referrer-policy', "unsafe-url", "no-referrer"),
-    ("X-Frame-Options", 'x-frame-options', "deny", "sameorigin"),
 ])
 def test_conflicting_duplicates_are_low(header, key, first, second):
     """Only where the resolution discards one of the values."""
@@ -91,7 +91,7 @@ def test_joined_duplicates_carry_no_recommendation():
 
 
 def test_conflict_finding_names_the_problem():
-    result = analyze("X-Frame-Options: deny", "X-Frame-Options: sameorigin")['x-frame-options']
+    result = analyze("Referrer-Policy: unsafe-url", "Referrer-Policy: no-referrer")['referrer-policy']
     assert "conflicting values" in duplicate_finding(result).title
 
 
@@ -141,16 +141,28 @@ def test_join_strategy_concatenates_occurrences(header, key):
     assert "combine" in duplicate_finding(result).description
 
 
-def test_x_frame_options_conflict_resolves_to_the_strictest():
+def test_x_frame_options_conflict_is_resolved_by_its_own_checker():
+    """A browser joins the occurrences and works on the set, so the conflict is a
+    fact about the value rather than something the duplicate rule has to resolve."""
     result = analyze("X-Frame-Options: SAMEORIGIN", "X-Frame-Options: DENY")['x-frame-options']
-    assert result.value == "DENY"
-    assert "block framing" in duplicate_finding(result).description
+    assert result.value == "SAMEORIGIN, DENY"
+    assert duplicate_finding(result).severity == Severity.NOTE
+    assert has(result.findings, "blocks framing by contradicting itself")
 
 
 def test_x_frame_options_conflict_is_not_reported_as_optimal():
-    """The DENY it resolves to is an accident of the conflict, not a choice."""
+    """Framing is refused, but by the contradiction rather than by a choice."""
     result = analyze("X-Frame-Options: deny", "X-Frame-Options: sameorigin")['x-frame-options']
-    assert result.worst_severity > Severity.NOTE
+    assert result.worst_severity == Severity.LOW
+
+
+def test_two_unusable_x_frame_options_values_do_not_become_a_deny():
+    """The old rule resolved any conflict to DENY, which reported a framable page
+    as protected when neither value was one a browser applies."""
+    result = analyze("X-Frame-Options: bogus", "X-Frame-Options: garbage")['x-frame-options']
+    absent = analyze("X-Nothing: x")['x-frame-options'].worst_severity
+    assert result.worst_severity == absent
+    assert has(result.findings, "framable by anyone")
 
 
 # ---------------------------------------------------------------------------
