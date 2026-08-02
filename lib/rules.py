@@ -583,13 +583,23 @@ def _check_x_frame_options(value: str, extra: dict) -> list[Finding]:
 
 
 def _check_x_content_type_options(value: str, extra: dict) -> list[Finding]:
-    if value.strip().lower() == 'nosniff':
-        return [Finding('X-Content-Type-Options', Severity.OK, "X-Content-Type-Options: nosniff (correct)")]
+    # Fetch's "determine nosniff" splits the value on commas and compares only
+    # values[0], ASCII case-insensitively — so `nosniff, anything` is protected and
+    # `anything, nosniff` is not. A quoted string is collected with its quotes, so
+    # `"nosniff"` does not match: the quoted form the HSTS RFC allows is no good here.
+    first = _split_outside_quotes(value, ',', keep_empty=True)[0].strip()
+    if first.lower() == 'nosniff':
+        return [Finding('X-Content-Type-Options', Severity.OK,
+                        "X-Content-Type-Options: nosniff (correct)")]
     return [Finding(
         header='X-Content-Type-Options',
-        severity=Severity.MEDIUM,
-        title=f"X-Content-Type-Options: unexpected value '{value}'",
-        description="The only valid value is 'nosniff'.",
+        severity=extra.get(ABSENT_SEVERITY, Severity.MEDIUM),
+        title=f"X-Content-Type-Options: '{first}' leaves MIME sniffing on",
+        description="Only 'nosniff' switches the protection on, and only as the first value of "
+                    "the header. Anything else leaves the browser free to ignore the declared "
+                    "Content-Type and guess from the bytes — so a file a user uploaded, served "
+                    "as text/plain, can still be read as HTML and run as the site. It also stops "
+                    "blocking a script or stylesheet whose response carries the wrong type.",
         recommendation="Set X-Content-Type-Options: nosniff",
     )]
 

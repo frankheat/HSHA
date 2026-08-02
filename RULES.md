@@ -284,8 +284,28 @@ Strict-Transport-Security:
 
 | Value | Severity | Rationale |
 |---|---|---|
-| `nosniff` | OK | Prevents MIME-type sniffing |
-| Any other value | MEDIUM | The only valid value is `nosniff` |
+| `nosniff` | OK | The browser honours the declared `Content-Type` instead of guessing |
+| Anything else | Same as absent | The protection is not on, which is where a response with no header already is |
+
+**Only the first value counts.** Fetch's *determine nosniff* splits the header on
+commas, strips spaces around each part, and compares **`values[0]`** — ASCII
+case-insensitively — against `nosniff`. Two consequences that are easy to get
+backwards:
+
+- `nosniff, anything` **is** protected. A proxy that appends to the existing header
+  rather than adding a second line produces exactly this, and reporting it as
+  unprotected would be a false alarm.
+- `anything, nosniff` is **not** protected. The token being present somewhere in
+  the value means nothing.
+
+A quoted string is collected with its quotes still attached, so `"nosniff"` does
+not match and the protection stays off — unlike `Strict-Transport-Security`, where
+RFC 6797 does allow the quoted form. The two headers differ here, and copying the
+habit from one to the other silently disables this one.
+
+Sent more than once, the occurrences are joined with a comma before that split, so
+the first occurrence decides — which is what the default duplicate strategy
+already evaluates.
 
 ---
 

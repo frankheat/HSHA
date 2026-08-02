@@ -31,6 +31,11 @@ CASES = [
     ("X-Content-Type-Options", "nosniff", Severity.OK),
     ("X-Content-Type-Options", "NOSNIFF", Severity.OK),
     ("X-Content-Type-Options", "sniff", Severity.MEDIUM),
+    # Fetch compares values[0] only: what follows a comma cannot switch it on or off.
+    ("X-Content-Type-Options", "nosniff, foo", Severity.OK),
+    ("X-Content-Type-Options", "nosniff, nosniff", Severity.OK),
+    ("X-Content-Type-Options", "foo, nosniff", Severity.MEDIUM),
+    ("X-Content-Type-Options", '"nosniff"', Severity.MEDIUM),
 
     # --- Cross-Origin-Opener-Policy ---
     ("Cross-Origin-Opener-Policy", "same-origin", Severity.OK),
@@ -822,3 +827,39 @@ def test_hsts_missing_include_subdomains_does_not_depend_on_having_subdomains():
     assert not finding.is_contingent
     assert "no subdomains at all is not exempt" in finding.description
     assert "Domain=example.com" in finding.description      # names the mechanism
+
+
+# ---------------------------------------------------------------------------
+# X-Content-Type-Options: only the first value decides
+# ---------------------------------------------------------------------------
+
+def test_nosniff_is_read_as_the_first_value_not_the_whole_header():
+    """Fetch's determine-nosniff splits on commas and compares values[0], so a
+    proxy that appends to the header instead of adding a line does not switch the
+    protection off — and reporting that it did would be a false alarm."""
+    assert severity_for("X-Content-Type-Options", "nosniff, nosniff") == Severity.OK
+    assert severity_for("X-Content-Type-Options", "nosniff , x") == Severity.OK
+    assert severity_for("X-Content-Type-Options", "x, nosniff") != Severity.OK
+
+
+def test_nosniff_does_not_accept_the_quoted_form():
+    """The splitting algorithm keeps the quotes inside the value, so values[0] is
+    '"nosniff"' and does not match — unlike HSTS, where the RFC allows quoting."""
+    assert severity_for("X-Content-Type-Options", '"nosniff"') != Severity.OK
+
+
+def test_nosniff_off_weighs_the_same_as_an_absent_header():
+    absent = analyze("X-Nothing: x")['x-content-type-options'].worst_severity
+    assert severity_for("X-Content-Type-Options", "sniff") == absent
+
+    from lib.config import AppConfig, HeaderOverride
+    config = AppConfig(overrides={
+        'x-content-type-options': HeaderOverride(severity_if_missing='high'),
+    })
+    assert severity_for("X-Content-Type-Options", "sniff", config) == Severity.HIGH
+
+
+def test_nosniff_finding_says_what_is_left_on():
+    finding = findings_for("X-Content-Type-Options", "sniff")[0]
+    assert "leaves MIME sniffing on" in finding.title
+    assert "uploaded" in finding.description
