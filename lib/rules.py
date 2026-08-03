@@ -1477,15 +1477,24 @@ def _check_x_download_options(value: str, extra: dict) -> list[Finding]:
     )]
 
 
-# The types §4.1 switches on. The quotes are part of the comparison: the grammar is
-# `1#( quoted-string )`, and header values are extracted with their quotes intact,
-# so an unquoted token matches no statement in the switch and is passed over.
-_CSD_TYPES = {'"cache"', '"cookies"', '"storage"', '"executionContexts"', '"clientHints"'}
+# Every value a browser might act on, not only the five §4.1 switches on: two more
+# ship in Chromium without being in the specification at all. The quotes are part
+# of the comparison — the grammar is `1#( quoted-string )` and values are extracted
+# with their quotes intact, so an unquoted token matches nothing and is passed over.
+_CSD_TYPES = {
+    '"cache"', '"cookies"', '"storage"', '"executionContexts"', '"clientHints"',
+    '"prefetchCache"', '"prerenderCache"',      # Chromium only, outside the spec
+}
 _CSD_WILDCARD = '"*"'
-# What a response that clears data is expected to name. executionContexts is left
-# out deliberately: no shipping browser implements it. Chrome and Edge never did,
-# Firefox carried it from 63 to 68 and Safari from 17 to 18.3, and both withdrew
-# it — so asking for it would be asking for something that runs nowhere.
+
+# What a response that clears data is asked to name: the three every current
+# browser acts on. The rest are recognised above so that naming them is never
+# mistaken for naming nothing, but are not required —
+#   executionContexts  no shipping browser implements it. Chrome and Edge never
+#                      did; Firefox carried it 63→68 and Safari 17→18.3, and both
+#                      withdrew it, so asking for it asks for what runs nowhere.
+#   clientHints        `"cache"` and `"cookies"` already imply it.
+#   prefetch/prerenderCache  Chromium-only extensions, absent from the spec.
 _CSD_EXPECTED = {'"cache"', '"cookies"', '"storage"'}
 
 

@@ -1023,3 +1023,22 @@ def test_execution_contexts_is_accepted_but_not_demanded():
     assert severity_for("Clear-Site-Data",
                         '"cache","cookies","storage","executionContexts"') == Severity.OK
     assert "executionContexts" not in findings_for("Clear-Site-Data", '"cookies"')[0].title
+
+
+@pytest.mark.parametrize("value", ['"prefetchCache"', '"prerenderCache"', '"clientHints"'])
+def test_a_type_outside_what_we_ask_for_is_still_recognised(value):
+    """Chromium clears the prefetch and prerender caches on these, and the spec's
+    switch has clientHints. Calling them 'nothing' would be a false statement about
+    a response that does clear something — recognising them is not the same as
+    requiring them."""
+    findings = findings_for("Clear-Site-Data", value)
+    assert "clears nothing" not in findings[0].title
+    assert "missing directives" in findings[0].title
+
+
+def test_the_logout_example_from_the_docs_is_clean():
+    """MDN's own sign-out example carries two Chromium-only types and one no
+    browser implements; the three that matter are all there."""
+    value = ('"cache", "cookies", "storage", "executionContexts", '
+             '"prefetchCache", "prerenderCache"')
+    assert severity_for("Clear-Site-Data", value) == Severity.OK

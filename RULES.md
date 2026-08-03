@@ -717,15 +717,37 @@ That makes `Clear-Site-Data: *` a header that clears **nothing**, which is the
 reason the last row exists: it looks like the strongest possible value and is the
 emptiest.
 
-**`"executionContexts"` is accepted and not asked for.** It is what would reload
-the browsing contexts still open when the session ends, and the specification's own
-sign-out example includes it — but no shipping browser implements it. Chrome and
-Edge never did; Firefox carried it from 63 to 68 and Safari from 17 to 18.3, and
-both withdrew it. Requiring it would be requiring something that runs nowhere.
-Naming it alongside the other three is harmless and does not affect the verdict:
-unknown types are skipped, so it costs the response nothing. `"clientHints"` is
-not asked for either, for a different reason — `"cache"` and `"cookies"` already
-imply it.
+**Why three values are asked for out of eight.** The specification's switch names
+five types plus the wildcard, and Chromium ships two more that are not in it at
+all. What separates them is not the specification but what a browser does today:
+
+| Value | In the spec | Implemented today |
+|---|---|---|
+| `"cookies"` | yes | every browser, since 2018 |
+| `"storage"` | yes | every browser, since 2018 |
+| `"cache"` | yes | Chrome/Edge 127, Firefox 138, Safari 17 |
+| `"*"` | yes | Firefox and Safari throughout; **Chrome/Edge only from 127** |
+| `"clientHints"` | yes | Chrome/Edge 117 only |
+| `"executionContexts"` | yes | **nowhere** — Firefox carried it 63→68, Safari 17→18.3, both withdrew it |
+| `"prefetchCache"` | no | Chrome/Edge 138 |
+| `"prerenderCache"` | no | Chrome/Edge 138 |
+
+Only the first three are asked for. All eight are **recognised**, so naming any of
+them is never mistaken for naming nothing — the sign-out example in the browser
+documentation carries five of them, and it is clean.
+
+`"executionContexts"` is the one worth knowing about: it is what *would* reload
+the browsing contexts still open when the session ends, it is in the
+specification's own sign-out example, and two browsers implemented it and took it
+back out. A tab left open at logout keeps running with whatever it holds in
+memory, and no value in this header changes that today.
+
+Two dates are worth keeping in mind when a response leans on one value alone.
+`"*"` did nothing on Chrome and Edge before version 127, so a site relying on the
+wildcard was clearing nothing there until mid-2024. And `"cache"` carries open
+caveats on Chromium — some requests are still served from the cache unless the tab
+is reloaded, and setting it can hang the page for seconds — so it is the least
+dependable of the three.
 
 ---
 
