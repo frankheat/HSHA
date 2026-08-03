@@ -1483,8 +1483,9 @@ def _check_x_download_options(value: str, extra: dict) -> list[Finding]:
 _CSD_TYPES = {'"cache"', '"cookies"', '"storage"', '"executionContexts"', '"clientHints"'}
 _CSD_WILDCARD = '"*"'
 # What a response that clears data is expected to name. executionContexts is left
-# out deliberately: Chrome does not implement it, so asking for it would be asking
-# for something that changes nothing on most of the traffic.
+# out deliberately: no shipping browser implements it. Chrome and Edge never did,
+# Firefox carried it from 63 to 68 and Safari from 17 to 18.3, and both withdrew
+# it — so asking for it would be asking for something that runs nowhere.
 _CSD_EXPECTED = {'"cache"', '"cookies"', '"storage"'}
 
 

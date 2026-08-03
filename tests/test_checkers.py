@@ -1017,8 +1017,9 @@ def test_an_unknown_type_beside_a_known_one_is_only_skipped():
 
 
 def test_execution_contexts_is_accepted_but_not_demanded():
-    """Chrome does not implement it, so asking for it would ask for something that
-    changes nothing on most traffic — but naming it must not break the rest."""
+    """No shipping browser implements it — Chrome and Edge never did, Firefox and
+    Safari both withdrew it — so asking for it would ask for something that runs
+    nowhere. Naming it must still not break the rest of the list."""
     assert severity_for("Clear-Site-Data",
                         '"cache","cookies","storage","executionContexts"') == Severity.OK
     assert "executionContexts" not in findings_for("Clear-Site-Data", '"cookies"')[0].title

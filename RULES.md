@@ -717,13 +717,15 @@ That makes `Clear-Site-Data: *` a header that clears **nothing**, which is the
 reason the last row exists: it looks like the strongest possible value and is the
 emptiest.
 
-**`"executionContexts"` is accepted and not asked for.** It is what reloads the
-browsing contexts still open when the session ends, and the specification's own
-sign-out example includes it — but Chrome does not implement it, so requiring it
-would be requiring something that changes nothing for most visitors. Naming it
-alongside the other three is fine and does not affect the verdict.
-`"clientHints"` is not asked for either: `"cache"` and `"cookies"` already imply
-it.
+**`"executionContexts"` is accepted and not asked for.** It is what would reload
+the browsing contexts still open when the session ends, and the specification's own
+sign-out example includes it — but no shipping browser implements it. Chrome and
+Edge never did; Firefox carried it from 63 to 68 and Safari from 17 to 18.3, and
+both withdrew it. Requiring it would be requiring something that runs nowhere.
+Naming it alongside the other three is harmless and does not affect the verdict:
+unknown types are skipped, so it costs the response nothing. `"clientHints"` is
+not asked for either, for a different reason — `"cache"` and `"cookies"` already
+imply it.
 
 ---
 
