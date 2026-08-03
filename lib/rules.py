@@ -1497,6 +1497,17 @@ _CSD_WILDCARD = '"*"'
 #   prefetch/prerenderCache  Chromium-only extensions, absent from the spec.
 _CSD_EXPECTED = {'"cache"', '"cookies"', '"storage"'}
 
+# The one question every verdict here turns on. This header only has a job on a
+# response that ends something, and which response that is lives in the request
+# and the application, not in the headers.
+_CSD_VERIFY = (
+    "Is this a response that ends a session — a logout, a password change, an account "
+    "deletion? If it is not, there is nothing here: this header only has a job where data "
+    "should stop being available, and clearing a visitor's storage on an ordinary page "
+    "would be the defect. If it is, what the response leaves behind stays readable to "
+    "whoever uses the browser next."
+)
+
 
 def _check_clear_site_data(value: str, extra: dict) -> list[Finding]:
     declared = {t.strip() for t in _split_outside_quotes(value, ',')}
@@ -1514,7 +1525,7 @@ def _check_clear_site_data(value: str, extra: dict) -> list[Finding]:
                         "still attached. None of these matches a type it knows, so the list it "
                         "builds is empty and no data is removed. Writing * or cookies without "
                         "quotes is the usual way to land here.",
-            recommendation='Set Clear-Site-Data: "cache", "cookies", "storage"',
+            verify=_CSD_VERIFY,
         )]
 
     if _CSD_WILDCARD in known:
@@ -1527,10 +1538,14 @@ def _check_clear_site_data(value: str, extra: dict) -> list[Finding]:
             header='Clear-Site-Data',
             severity=Severity.LOW,
             title=f"Clear-Site-Data: missing directives: {', '.join(sorted(missing))}",
-            description="A response that clears site data is normally clearing it because a "
-                        "session ended, and what is left behind is readable by whoever uses the "
-                        "browser next.",
-            recommendation='Set Clear-Site-Data: "cache", "cookies", "storage"',
+            description="Some types are cleared and these are not. Leaving one out can be "
+                        "deliberate — the specification has an example of a site clearing a "
+                        "subset on purpose, because sweeping every subdomain does damage of its "
+                        "own, and on Chromium `\"cache\"` is the least dependable of the three, "
+                        "with documented multi-second hangs.",
+            verify=_CSD_VERIFY + " Was leaving these out a decision? What the session relies on "
+                   "decides whether it matters: a token in localStorage outlives a policy that "
+                   "clears only cookies.",
         )]
     return [Finding('Clear-Site-Data', Severity.OK,
                     'Clear-Site-Data: cache, cookies and storage cleared')]
@@ -1588,6 +1603,7 @@ _MISSING_RECS: dict[str, str] = {
 # not state, the finding carries that check instead of a recommendation.
 _MISSING_VERIFY: dict[str, str] = {
     'cache-control': _CACHE_CONTROL_VERIFY,
+    'clear-site-data': _CSD_VERIFY,
 }
 
 # Descriptions for headers whose absence needs more than "it is not there".
@@ -1605,6 +1621,9 @@ _MISSING_DESCRIPTIONS: dict[str, str] = {
         "static asset. It is a problem for a response carrying a signed-in user's data, "
         "which can then be read from the cache after logout or by the next person to use "
         "a shared machine.",
+    'clear-site-data':
+        "This response clears no site data. On almost every response that is the right "
+        "outcome — the header exists to end things, not to be present.",
     'permissions-policy':
         "Every feature stays at the allowlist a browser applies by default, which leaves "
         "two things open. A cross-origin document embedded in this page can use the "

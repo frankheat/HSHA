@@ -698,14 +698,29 @@ a question about network position, not about authentication.
 
 ### Clear-Site-Data
 
-**Required:** no — **Severity if missing:** INFO
+**Required:** no — **Absent:** ? INFO *(right on almost every response — see below)*
 
 | Condition | Severity | Rationale |
 |---|---|---|
 | Contains `"*"` | OK | Every type cleared |
 | `"cache"`, `"cookies"` and `"storage"` all present | OK | The three a browser acts on everywhere |
-| One or more of those three missing | LOW | Incomplete clearing — residual data outlives the session |
-| No value matches a type at all | LOW | Nothing is cleared, while the response looks like it clears something |
+| One or more of those three missing | ? LOW | Incomplete clearing — residual data outlives the session |
+| No value matches a type at all | ? LOW | Nothing is cleared, while the response looks like it clears something |
+| Absent | ? INFO | Nothing is cleared, and the response never said otherwise |
+
+**One question governs all of them: does this response end something?** A logout, a
+password change, an account deletion. This header has no job anywhere else —
+clearing a visitor's storage on an ordinary page would itself be the defect — and
+which response is which lives in the request and the application, not in the
+headers. So every verdict but a complete policy carries that question, and none of
+them is stated as settled.
+
+That is also why an absent header is not treated the way the other
+absence-is-correct headers are. `X-XSS-Protection` and the CORS pair should never
+be sent at all; this one should be sent on exactly one kind of response, and the
+tool cannot tell whether it is looking at that one. Absence ranks below a header
+that is present and clears nothing: sending nothing is not a mistake, sending
+something that does nothing is.
 
 **The quotes are part of the value.** The grammar is `1#( quoted-string )`, and
 §4.1 switches on each extracted value *with its quotes still attached*: `"cache"`,

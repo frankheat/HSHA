@@ -1042,3 +1042,40 @@ def test_the_logout_example_from_the_docs_is_clean():
     value = ('"cache", "cookies", "storage", "executionContexts", '
              '"prefetchCache", "prerenderCache"')
     assert severity_for("Clear-Site-Data", value) == Severity.OK
+
+
+# ---------------------------------------------------------------------------
+# Clear-Site-Data: one question governs every verdict
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("value", [None, "*", '"cookies"'])
+def test_every_clear_site_data_verdict_asks_whether_the_session_ends_here(value):
+    """The header only has a job on a response that ends something. If this is not
+    one, none of the verdicts matter — so none of them is stated as settled."""
+    if value is None:
+        finding = analyze("X-Nothing: x")['clear-site-data'].findings[0]
+    else:
+        finding = findings_for("Clear-Site-Data", value)[0]
+    assert finding.is_contingent
+    assert "ends a session" in finding.verify
+
+
+@pytest.mark.parametrize("value", ['"*"', '"cache", "cookies", "storage"'])
+def test_a_complete_policy_needs_no_question(value):
+    findings = findings_for("Clear-Site-Data", value)
+    assert findings[0].severity == Severity.OK
+    assert not findings[0].is_contingent
+
+
+def test_an_absent_header_ranks_below_a_broken_one():
+    """Sending nothing is not a mistake; sending something that clears nothing is."""
+    absent = analyze("X-Nothing: x")['clear-site-data'].worst_severity
+    assert absent < severity_for("Clear-Site-Data", "*")
+
+
+def test_the_incomplete_finding_says_the_omission_may_be_deliberate():
+    """The specification has an example of a site clearing a subset on purpose, and
+    on Chromium `"cache"` is the least dependable of the three."""
+    finding = findings_for("Clear-Site-Data", '"cookies"')[0]
+    assert "deliberate" in finding.description
+    assert "localStorage" in finding.verify
