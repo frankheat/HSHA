@@ -1477,25 +1477,53 @@ def _check_x_download_options(value: str, extra: dict) -> list[Finding]:
     )]
 
 
+# The types §4.1 switches on. The quotes are part of the comparison: the grammar is
+# `1#( quoted-string )`, and header values are extracted with their quotes intact,
+# so an unquoted token matches no statement in the switch and is passed over.
+_CSD_TYPES = {'"cache"', '"cookies"', '"storage"', '"executionContexts"', '"clientHints"'}
+_CSD_WILDCARD = '"*"'
+# What a response that clears data is expected to name. executionContexts is left
+# out deliberately: Chrome does not implement it, so asking for it would be asking
+# for something that changes nothing on most of the traffic.
+_CSD_EXPECTED = {'"cache"', '"cookies"', '"storage"'}
+
+
 def _check_clear_site_data(value: str, extra: dict) -> list[Finding]:
-    # OWASP recommended: "cache","cookies","storage"
-    recommended = {'"cache"', '"cookies"', '"storage"'}
+    declared = {t.strip() for t in _split_outside_quotes(value, ',')}
+    known = declared & (_CSD_TYPES | {_CSD_WILDCARD})
 
-    if '"*"' in value or value.strip() == '*':
-        return [Finding('Clear-Site-Data', Severity.OK, 'Clear-Site-Data: * (all data cleared)')]
+    if not known:
+        # Every token was skipped, so the list of types is empty and nothing is
+        # cleared — while the response looks like it clears something.
+        return [Finding(
+            header='Clear-Site-Data',
+            severity=Severity.LOW,
+            title=f"Clear-Site-Data: '{value}' clears nothing",
+            description="Every value has to be a quoted string — the grammar is "
+                        "1#( quoted-string ) — and a browser compares each one with its quotes "
+                        "still attached. None of these matches a type it knows, so the list it "
+                        "builds is empty and no data is removed. Writing * or cookies without "
+                        "quotes is the usual way to land here.",
+            recommendation='Set Clear-Site-Data: "cache", "cookies", "storage"',
+        )]
 
-    present = {d.strip() for d in value.split(',')}
-    missing = recommended - present
+    if _CSD_WILDCARD in known:
+        return [Finding('Clear-Site-Data', Severity.OK,
+                        'Clear-Site-Data: "*" (every type cleared)')]
 
+    missing = _CSD_EXPECTED - known
     if missing:
         return [Finding(
             header='Clear-Site-Data',
             severity=Severity.LOW,
             title=f"Clear-Site-Data: missing directives: {', '.join(sorted(missing))}",
-            description="OWASP recommends clearing cache, cookies, and storage on logout/sensitive operations.",
-            recommendation='Set Clear-Site-Data: "cache","cookies","storage"',
+            description="A response that clears site data is normally clearing it because a "
+                        "session ended, and what is left behind is readable by whoever uses the "
+                        "browser next.",
+            recommendation='Set Clear-Site-Data: "cache", "cookies", "storage"',
         )]
-    return [Finding('Clear-Site-Data', Severity.OK, 'Clear-Site-Data: cache, cookies and storage cleared')]
+    return [Finding('Clear-Site-Data', Severity.OK,
+                    'Clear-Site-Data: cache, cookies and storage cleared')]
 
 
 _CHECKERS: dict[str, Callable[[str, dict], list[Finding]]] = {

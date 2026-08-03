@@ -702,9 +702,28 @@ a question about network position, not about authentication.
 
 | Condition | Severity | Rationale |
 |---|---|---|
-| Contains `"*"` | OK | All browsing data cleared |
-| All three directives present: `"cache"`, `"cookies"`, `"storage"` | OK | OWASP recommended configuration |
-| One or more of `"cache"`, `"cookies"`, `"storage"` missing | LOW | Incomplete data clearing — residual data may persist after logout |
+| Contains `"*"` | OK | Every type cleared |
+| `"cache"`, `"cookies"` and `"storage"` all present | OK | The three a browser acts on everywhere |
+| One or more of those three missing | LOW | Incomplete clearing — residual data outlives the session |
+| No value matches a type at all | LOW | Nothing is cleared, while the response looks like it clears something |
+
+**The quotes are part of the value.** The grammar is `1#( quoted-string )`, and
+§4.1 switches on each extracted value *with its quotes still attached*: `"cache"`,
+not `cache`. A token that matches no branch is passed over — §3.1 requires it
+("User agents MUST ignore unknown types when parsing the header") — so an
+unquoted value does not fail the header, it simply contributes nothing.
+
+That makes `Clear-Site-Data: *` a header that clears **nothing**, which is the
+reason the last row exists: it looks like the strongest possible value and is the
+emptiest.
+
+**`"executionContexts"` is accepted and not asked for.** It is what reloads the
+browsing contexts still open when the session ends, and the specification's own
+sign-out example includes it — but Chrome does not implement it, so requiring it
+would be requiring something that changes nothing for most visitors. Naming it
+alongside the other three is fine and does not affect the verdict.
+`"clientHints"` is not asked for either: `"cache"` and `"cookies"` already imply
+it.
 
 ---
 

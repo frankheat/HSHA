@@ -106,6 +106,12 @@ CASES = [
     ("Clear-Site-Data", '"*"', Severity.OK),
     ("Clear-Site-Data", '"cache", "cookies", "storage"', Severity.OK),
     ("Clear-Site-Data", '"cookies"', Severity.LOW),
+    # §3.1's grammar is 1#( quoted-string ) and §4.1 compares each value with its
+    # quotes, so an unquoted token matches nothing and is passed over.
+    ("Clear-Site-Data", "*", Severity.LOW),
+    ("Clear-Site-Data", "cookies", Severity.LOW),
+    ("Clear-Site-Data", '"COOKIES"', Severity.LOW),
+    ("Clear-Site-Data", '"bogus", "cookies"', Severity.LOW),
 
     # --- Permissions-Policy — graded on each feature's default allowlist ---
     ("Permissions-Policy", PP_CLOSED, Severity.OK),                     # both axes closed
@@ -982,3 +988,37 @@ def test_every_caching_verdict_asks_the_same_question():
               for v in ("private", "no-cache", "max-age=600", "public, max-age=600")}
     checks.add(analyze("X-Nothing: x")['cache-control'].findings[0].verify)
     assert len(checks) == 1
+
+
+# ---------------------------------------------------------------------------
+# Clear-Site-Data: the quotes are part of the value
+# ---------------------------------------------------------------------------
+
+def test_an_unquoted_wildcard_clears_nothing():
+    """It used to be read as the wildcard and reported as everything cleared —
+    saying a logout wiped the browser when it wiped none of it."""
+    findings = findings_for("Clear-Site-Data", "*")
+    assert findings[0].severity == Severity.LOW
+    assert "clears nothing" in findings[0].title
+    assert severity_for("Clear-Site-Data", '"*"') == Severity.OK
+
+
+@pytest.mark.parametrize("value", ["cookies", '"COOKIES"', '"bogus"', "cache, cookies"])
+def test_a_value_that_matches_no_type_is_reported_as_clearing_nothing(value):
+    assert "clears nothing" in findings_for("Clear-Site-Data", value)[0].title
+
+
+def test_an_unknown_type_beside_a_known_one_is_only_skipped():
+    """§3.1: 'User agents MUST ignore unknown types when parsing the header' — the
+    rest of the list still applies."""
+    findings = findings_for("Clear-Site-Data", '"bogus", "cookies"')
+    assert "missing directives" in findings[0].title
+    assert '"cookies"' not in findings[0].title
+
+
+def test_execution_contexts_is_accepted_but_not_demanded():
+    """Chrome does not implement it, so asking for it would ask for something that
+    changes nothing on most traffic — but naming it must not break the rest."""
+    assert severity_for("Clear-Site-Data",
+                        '"cache","cookies","storage","executionContexts"') == Severity.OK
+    assert "executionContexts" not in findings_for("Clear-Site-Data", '"cookies"')[0].title
