@@ -962,3 +962,23 @@ def test_referrer_policy_unknown_and_empty_tokens_are_skipped_not_honoured(value
 def test_referrer_policy_with_no_valid_token_at_all_is_still_absent():
     absent = analyze("X-Nothing: x")['referrer-policy'].worst_severity
     assert severity_for("Referrer-Policy", "bogus, nonsense") == absent
+
+
+def test_the_caching_question_separates_the_two_ways_a_user_is_identified():
+    """RFC 9111 §3.5 bars a shared cache from reusing a response to a request that
+    carried Authorization, so the shared-cache half of the finding does not apply
+    there — and the three directives that lift that bar are worth naming, since
+    must-revalidate is one of them and does not sound like a permission."""
+    check = findings_for("Cache-Control", "max-age=600")[0].verify
+    assert "session cookie" in check and "Authorization header" in check
+    for directive in ("public", "s-maxage", "must-revalidate"):
+        assert directive in check
+
+
+def test_every_caching_verdict_asks_the_same_question():
+    """One question, asked once: the answer settles all of them, and wording that
+    drifted between findings would read as several different checks."""
+    checks = {findings_for("Cache-Control", v)[0].verify
+              for v in ("private", "no-cache", "max-age=600", "public, max-age=600")}
+    checks.add(analyze("X-Nothing: x")['cache-control'].findings[0].verify)
+    assert len(checks) == 1

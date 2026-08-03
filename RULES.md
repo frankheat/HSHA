@@ -662,6 +662,17 @@ belonging to a signed-in user? On a response that carries nothing user-specific
 there is nothing here, and `no-store` would only cost bandwidth, which is why it
 is the one value that needs no question.
 
+**How the user was identified changes the answer.** The verdicts below describe a
+shared cache handing one user's response to another, which is what happens when
+the session lives in a **cookie**: nothing in the caching rules knows about
+cookies. A request authenticated with an **`Authorization` header** is different —
+RFC 9111 §3.5 bars a shared cache from reusing such a response at all, *unless*
+the response carries one of exactly three directives: `must-revalidate`, `public`
+or `s-maxage`. On that kind of endpoint the shared-cache half of the finding falls
+away and what remains is the browser's own disk, which is the `private` case — and
+the three directives above become the ones to look for, `must-revalidate` most of
+all, since it reads as caution and is a permission.
+
 | Value | Severity | Rationale |
 |---|---|---|
 | `no-store` | OK | Nothing is stored anywhere, and right either way — the only verdict that needs no question |

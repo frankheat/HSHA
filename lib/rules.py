@@ -1121,10 +1121,15 @@ _CACHE_CONTROL_DIRECTIVES = {
 # The question every non-OK caching verdict below turns on. Asked once, because
 # the answer is the same for all of them and it is not in the response.
 _CACHE_CONTROL_VERIFY = (
-    "Does this response carry data belonging to a signed-in user — anything the server "
-    "decided from a cookie or an Authorization header? If it does, this stands. If it "
-    "carries nothing user-specific, there is nothing here: storing a public resource is "
-    "what these directives are for, and no-store would only cost bandwidth."
+    "Does this response carry data belonging to a signed-in user? If it does not, there "
+    "is nothing here — storing a public resource is what these directives are for, and "
+    "no-store would only cost bandwidth. If it does, how is the user identified? "
+    "By a session cookie: this stands, and a shared cache can hand the response to the "
+    "next person who asks for the same URL. "
+    "By an Authorization header: RFC 9111 §3.5 already bars a shared cache from reusing "
+    "it, so what is left is the copy on the user's own disk — unless the value also "
+    "carries public, s-maxage or must-revalidate, the three directives that switch "
+    "shared-cache reuse back on for exactly those requests."
 )
 
 
