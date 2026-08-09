@@ -940,7 +940,8 @@ def _pp_reaches_an_embed(feature: str, declared: dict[str, str]) -> bool:
 
 def _pp_reaches_this_origin(feature: str, declared: dict[str, str]) -> bool:
     """Whether script running on this origin — an XSS included — can use it."""
-    return bool(_pp_effective(feature, declared))
+    origins = _pp_effective(feature, declared)
+    return '*' in origins or 'self' in origins
 
 
 def _check_permissions_policy(value: str, extra: dict) -> list[Finding]:

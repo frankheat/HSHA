@@ -432,7 +432,7 @@ closes none of the any-origin features leaves — see below)*
 |---|---|---|
 | A feature whose default is this origin only, widened to `*` | MEDIUM | The policy is granting access rather than restricting it: any embedded document gains a capability a browser was withholding |
 | A tracking feature still reachable by an embedded document | ? INFO | The user's privacy toward a party the site chose to embed — often what that party was embedded to do |
-| `camera`, `microphone` or `geolocation` not set to `()` | ? LOW | Script that achieves execution here can raise their permission prompt, and the prompt names the site rather than the code that asked |
+| `camera`, `microphone` or `geolocation` still reachable by this origin | ? LOW | Script that achieves execution here can raise their permission prompt, and the prompt names the site rather than the code that asked |
 
 **Two questions, asked separately.** The header answers one thing for documents
 the page embeds and a different thing for script running on the page's own origin,
@@ -477,8 +477,11 @@ pick what to share, `usb`, `serial`, `hid` and `bluetooth` make them pick a
 device, `payment` opens a payment flow. There the consent is informed about *what*
 and not only about *who*.
 
-Only `()` closes this axis. `(self)` authorises this origin, and an XSS runs on
-this origin — reading a declared `camera=(self)` as "handled" would be a
+This axis is closed whenever the allowlist does not grant the feature to this
+origin. `()` closes it entirely; naming only external origins —
+`camera=("https://video.trusted.com")` — does the same for this origin while
+still granting it to the named party. `(self)` authorises this origin, and an XSS
+runs on this origin — reading a declared `camera=(self)` as "handled" would be a
 reassuring falsehood. The reverse holds on the first axis, where `(self)` is
 enough because it excludes every other origin.
 
