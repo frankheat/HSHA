@@ -14,3 +14,7 @@ headers:
     min_max_age: 63072000      # OWASP recommended: 2 years
     require_include_subdomains: true
     require_preload: true
+
+  # --- Privacy headers ---
+  X-DNS-Prefetch-Control:
+    severity_if_missing: LOW

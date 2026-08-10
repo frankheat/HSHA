@@ -771,12 +771,12 @@ dependable of the three.
 
 ### X-DNS-Prefetch-Control
 
-**Required:** no — **Severity if missing:** INFO
+**Required:** no — **Severity if missing:** INFO *(LOW in extended profile)*
 
 | Value | Severity | Rationale |
 |---|---|---|
 | `off` | OK | DNS prefetching disabled |
-| Any other value | INFO | DNS prefetching enabled — can reveal visited subdomains |
+| Any other value | INFO *(LOW in extended)* | The browser resolves domains linked in the page before any navigation. Two things follow: the DNS resolver learns every hostname the page references — internal services, private subdomains, admin panels — whether or not the user navigates there. And an attacker with HTML injection can exfiltrate data through `<link rel=dns-prefetch>`, which resolves before CSP checks apply and so is not stopped by `script-src`, `img-src` or `connect-src` restrictions |
 
 ---
 

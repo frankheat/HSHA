@@ -303,9 +303,9 @@ def test_missing_cache_control_explains_heuristic_caching():
 
 def test_missing_required_header_still_gets_the_generic_fallback():
     from lib.config import AppConfig, HeaderOverride
-    config = AppConfig(overrides={'x-dns-prefetch-control': HeaderOverride(required=True)})
-    finding = analyze("X-Nothing: x", config=config)['x-dns-prefetch-control'].findings[0]
-    assert finding.recommendation == "Add the X-DNS-Prefetch-Control header."
+    config = AppConfig(overrides={'origin-agent-cluster': HeaderOverride(required=True)})
+    finding = analyze("X-Nothing: x", config=config)['origin-agent-cluster'].findings[0]
+    assert finding.recommendation == "Add the Origin-Agent-Cluster header."
 
 
 # ---------------------------------------------------------------------------

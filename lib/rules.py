@@ -1293,10 +1293,16 @@ def _check_x_dns_prefetch_control(value: str, extra: dict) -> list[Finding]:
         return [Finding('X-DNS-Prefetch-Control', Severity.OK, "X-DNS-Prefetch-Control: off")]
     return [Finding(
         header='X-DNS-Prefetch-Control',
-        severity=Severity.INFO,
+        severity=extra.get(ABSENT_SEVERITY, Severity.INFO),
         title=f"X-DNS-Prefetch-Control: '{value}' (DNS prefetching enabled)",
-        description="DNS prefetching can reveal visited subdomains to DNS resolvers.",
-        recommendation="Set X-DNS-Prefetch-Control: off if privacy is a concern.",
+        description="DNS prefetching resolves domains linked in the page before the user clicks. "
+                    "The DNS resolver learns every hostname the page links to — internal services, "
+                    "private subdomains, an admin panel the page references — whether or not the "
+                    "user navigates there. And an attacker with HTML injection can exfiltrate data "
+                    "through it: <link rel=dns-prefetch> resolves before any CSP directive can "
+                    "stop it, so a page whose CSP blocks scripts, images and connections still "
+                    "leaks data through DNS queries to a resolver the attacker controls.",
+        recommendation="Set X-DNS-Prefetch-Control: off",
     )]
 
 
@@ -1598,6 +1604,8 @@ _MISSING_RECS: dict[str, str] = {
         "Cross-Origin-Embedder-Policy: require-corp",
     'cross-origin-resource-policy':
         "Cross-Origin-Resource-Policy: same-origin",
+    'x-dns-prefetch-control':
+        "X-DNS-Prefetch-Control: off",
 }
 
 # Where the absence of a header only matters under a condition the response does
@@ -1634,4 +1642,11 @@ _MISSING_DESCRIPTIONS: dict[str, str] = {
         "the prompt names the site, never the code that asked, so one click from a user "
         "who cannot tell the two apart is the whole interaction. A policy is the only "
         "thing that removes the prompt.",
+    'x-dns-prefetch-control':
+        "Browsers resolve domains linked in the page before the user navigates, by default. "
+        "The DNS resolver learns every hostname the page references — internal services, "
+        "private subdomains — whether or not the user clicks. And an attacker with HTML "
+        "injection can exfiltrate data through it: <link rel=dns-prefetch> resolves before "
+        "any CSP directive can stop it, so a page whose CSP blocks scripts, images and "
+        "connections still leaks data through DNS queries to a resolver the attacker controls.",
 }
