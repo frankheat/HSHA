@@ -450,12 +450,12 @@ def _check_hsts(value: str, extra: dict) -> list[Finding]:
             description="A browser ignores a Strict-Transport-Security header that does not "
                         "conform to RFC 6797 §6.1, so this site has no HSTS at all — the same "
                         "position as never sending the header. Nothing in the response says so.",
-            recommendation="Strict-Transport-Security: max-age=31536000; includeSubDomains",
+            recommendation="Strict-Transport-Security: max-age=63072000; includeSubDomains",
         )]
 
     max_age = int(directives['max-age'])
     try:
-        min_age = int(extra.get('min_max_age', 31536000))
+        min_age = int(extra.get('min_max_age', 63072000))
     except (TypeError, ValueError):
         raise ValueError(
             f"Invalid min_max_age '{extra.get('min_max_age')}' in config: must be an integer (seconds)."
@@ -473,7 +473,7 @@ def _check_hsts(value: str, extra: dict) -> list[Finding]:
                         "has no HSTS — the same position as never sending the header, and worse "
                         "for a visitor who had the entry already. It is the documented way to "
                         "turn HSTS off, so it may well be deliberate.",
-            recommendation="Set max-age to at least 31536000 (1 year).",
+            recommendation="Set max-age to at least 63072000 (2 years).",
         )]
 
     if max_age < min_age:
@@ -481,7 +481,7 @@ def _check_hsts(value: str, extra: dict) -> list[Finding]:
             header='Strict-Transport-Security',
             severity=Severity.MEDIUM,
             title=f"HSTS: max-age too short ({max_age}s < {min_age}s)",
-            description=f"OWASP recommends at least 1 year ({min_age}s). Short values reduce protection.",
+            description="OWASP recommends max-age=63072000 (2 years).",
             recommendation=f"Set max-age to at least {min_age}.",
         ))
 
@@ -1588,7 +1588,7 @@ _MISSING_RECS: dict[str, str] = {
     'content-security-policy':
         "Add a CSP header. Start conservative: Content-Security-Policy: default-src 'self'",
     'strict-transport-security':
-        "Strict-Transport-Security: max-age=31536000; includeSubDomains",
+        "Strict-Transport-Security: max-age=63072000; includeSubDomains",
     'x-frame-options':
         "X-Frame-Options: DENY (or use CSP frame-ancestors 'none')",
     'x-content-type-options':

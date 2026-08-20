@@ -11,11 +11,14 @@ from conftest import (
 # (header, value, expected worst severity)
 CASES = [
     # --- Strict-Transport-Security ---
-    ("Strict-Transport-Security", "max-age=31536000; includeSubDomains", Severity.OK),
-    ("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload", Severity.OK),
-    ("Strict-Transport-Security", "MAX-AGE=31536000; INCLUDESUBDOMAINS", Severity.OK),
-    ("Strict-Transport-Security", "max-age = 31536000; includeSubDomains", Severity.OK),
-    ("Strict-Transport-Security", "max-age=31536000", Severity.MEDIUM),
+    ("Strict-Transport-Security", "max-age=63072000; includeSubDomains", Severity.OK),
+    ("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload", Severity.OK),
+    ("Strict-Transport-Security", "MAX-AGE=63072000; INCLUDESUBDOMAINS", Severity.OK),
+    ("Strict-Transport-Security", "max-age = 63072000; includeSubDomains", Severity.OK),
+    ("Strict-Transport-Security", "max-age=63072000", Severity.MEDIUM),
+    # 1 year clears the preload list's eligibility floor but not the threshold the
+    # profiles set, which is OWASP's recommended 2 years.
+    ("Strict-Transport-Security", "max-age=31536000; includeSubDomains", Severity.MEDIUM),
     ("Strict-Transport-Security", "max-age=300; includeSubDomains", Severity.MEDIUM),
     ("Strict-Transport-Security", "max-age=0; includeSubDomains", Severity.HIGH),
     ("Strict-Transport-Security", "includeSubDomains", Severity.HIGH),
@@ -234,7 +237,7 @@ def test_hsts_preload_is_not_asked_about_unless_a_profile_asks():
     """preload is not defined by RFC 6797 — it is a submission convention, so the
     tool says nothing about it until a profile opts in."""
     from lib.config import AppConfig, HeaderOverride
-    value = "max-age=31536000; includeSubDomains"
+    value = "max-age=63072000; includeSubDomains"
     assert severity_for("Strict-Transport-Security", value) == Severity.OK
 
     config = AppConfig(overrides={
@@ -244,8 +247,8 @@ def test_hsts_preload_is_not_asked_about_unless_a_profile_asks():
 
 
 @pytest.mark.parametrize("value,title", [
-    ("max-age=31536000; includeSubDomains", "preload is not declared"),
-    ("max-age=31536000; includeSubDomains; preload", "not the same as being on the list"),
+    ("max-age=63072000; includeSubDomains", "preload is not declared"),
+    ("max-age=63072000; includeSubDomains; preload", "not the same as being on the list"),
 ])
 def test_hsts_preload_is_contingent_either_way(value, title):
     """The token is a declaration of intent; membership of the list is a separate
@@ -268,7 +271,7 @@ def test_hsts_rejects_non_integer_min_max_age():
         'strict-transport-security': HeaderOverride(extra={'min_max_age': 'one year'}),
     })
     with pytest.raises(ValueError, match="min_max_age"):
-        findings_for("Strict-Transport-Security", "max-age=31536000", config)
+        findings_for("Strict-Transport-Security", "max-age=63072000", config)
 
 
 def test_clear_site_data_lists_the_missing_directives():
@@ -487,9 +490,9 @@ def test_a_quoted_comma_does_not_split_a_directive():
 
 
 @pytest.mark.parametrize("value", [
-    "max-age=31536000; includeSubDomainss",     # doubled letter
-    "max-age=31536000; xincludeSubDomains",     # spurious prefix
-    "max-age=31536000; report-uri=https://x/includeSubDomains",
+    "max-age=63072000; includeSubDomainss",     # doubled letter
+    "max-age=63072000; xincludeSubDomains",     # spurious prefix
+    "max-age=63072000; report-uri=https://x/includeSubDomains",
 ])
 def test_hsts_only_accepts_the_real_directive_name(value):
     """A misspelled directive is an unrecognised one: browsers ignore it, so
@@ -499,7 +502,7 @@ def test_hsts_only_accepts_the_real_directive_name(value):
 
 def test_hsts_accepts_a_quoted_max_age():
     """RFC 6797 §6.1: directive-value = token / quoted-string."""
-    value = 'max-age="31536000"; includeSubDomains'
+    value = 'max-age="63072000"; includeSubDomains'
     assert severity_for("Strict-Transport-Security", value) == Severity.OK
 
 
@@ -654,10 +657,10 @@ def test_one_understood_directive_is_enough_to_be_judged_on_its_merits():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("value,reason", [
-    ("max-age=1; max-age=31536000", "appears more than once"),
-    ("max-age=31536000; includeSubDomains; includeSubDomains", "appears more than once"),
-    ("max-age=31536000; includeSubDomains=true", "must not be given a value"),
-    ("max-age=31536000; preload=1", "must not be given a value"),
+    ("max-age=1; max-age=63072000", "appears more than once"),
+    ("max-age=63072000; includeSubDomains; includeSubDomains", "appears more than once"),
+    ("max-age=63072000; includeSubDomains=true", "must not be given a value"),
+    ("max-age=63072000; preload=1", "must not be given a value"),
     ("max-age=forever", "must be a number of seconds"),
     ("max-age=-1", "must be a number of seconds"),
     ("includeSubDomains", "required max-age directive is missing"),
@@ -679,13 +682,13 @@ def test_hsts_names_the_offending_directive_as_it_is_spelled():
 
 def test_hsts_ignores_unrecognised_directives():
     """RFC 6797: unknown directives are skipped and the rest is processed."""
-    value = "max-age=31536000; includeSubDomains; some-future-directive"
+    value = "max-age=63072000; includeSubDomains; some-future-directive"
     assert severity_for("Strict-Transport-Security", value) == Severity.OK
 
 
 def test_hsts_accepts_the_quoted_form_the_rfc_shows():
     assert severity_for("Strict-Transport-Security",
-                        'max-age="31536000"; includeSubDomains') == Severity.OK
+                        'max-age="63072000"; includeSubDomains') == Severity.OK
 
 
 # ---------------------------------------------------------------------------
@@ -842,7 +845,7 @@ def test_hsts_max_age_zero_weighs_the_same_as_an_absent_header():
 def test_hsts_missing_include_subdomains_does_not_depend_on_having_subdomains():
     """The attacker picks the name, so a site with none is not exempt — the text has
     to say so, or a reader concludes the finding is not about them."""
-    finding = next(f for f in findings_for("Strict-Transport-Security", "max-age=31536000")
+    finding = next(f for f in findings_for("Strict-Transport-Security", "max-age=63072000")
                    if "includeSubDomains" in f.title)
     assert finding.severity == Severity.MEDIUM
     assert not finding.is_contingent

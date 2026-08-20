@@ -11,7 +11,7 @@ headers:
 
   # --- HSTS tuning ---
   Strict-Transport-Security:
-    min_max_age: 31536000
+    min_max_age: 63072000      # OWASP recommended: 2 years
     require_include_subdomains: true
 
   # --- Headers not in scope for this profile ---

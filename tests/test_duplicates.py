@@ -31,10 +31,10 @@ def test_single_occurrence_produces_no_duplicate_finding():
 # ---------------------------------------------------------------------------
 
 def test_identical_duplicates_collapse_to_one_value():
-    result = analyze("Strict-Transport-Security: max-age=31536000; includeSubDomains",
-                     "Strict-Transport-Security: max-age=31536000; includeSubDomains"
+    result = analyze("Strict-Transport-Security: max-age=63072000; includeSubDomains",
+                     "Strict-Transport-Security: max-age=63072000; includeSubDomains"
                      )['strict-transport-security']
-    assert result.value == "max-age=31536000; includeSubDomains"
+    assert result.value == "max-age=63072000; includeSubDomains"
     finding = duplicate_finding(result)
     assert finding.severity == Severity.NOTE
     assert "identical" in finding.description
@@ -58,7 +58,7 @@ def test_identical_duplicates_do_not_make_a_header_fail():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("header,key,first,second", [
-    ("Strict-Transport-Security", 'strict-transport-security', "max-age=31536000", "max-age=600"),
+    ("Strict-Transport-Security", 'strict-transport-security', "max-age=63072000", "max-age=600"),
 ])
 def test_conflicting_duplicates_are_low(header, key, first, second):
     """Only where the resolution discards one of the values."""
@@ -118,7 +118,7 @@ def test_default_strategy_is_first_wins():
     """RFC 6797 §8.1: the first HSTS header wins."""
     result = analyze(
         "Strict-Transport-Security: max-age=300",
-        "Strict-Transport-Security: max-age=31536000; includeSubDomains",
+        "Strict-Transport-Security: max-age=63072000; includeSubDomains",
     )['strict-transport-security']
     assert result.value == "max-age=300"
     assert "first value" in duplicate_finding(result).description

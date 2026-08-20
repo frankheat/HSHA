@@ -206,7 +206,7 @@ effective policy is their intersection. Findings combine as follows:
 |---|---|---|
 | Header does not conform to RFC 6797 §6.1 | Same as absent | A browser ignores such a header in full, so the site has no HSTS at all. Covers a missing or non-numeric `max-age`, a directive repeated (`max-age=1; max-age=2`), and `includeSubDomains` or `preload` given a value. The value may be quoted (`max-age="31536000"`), which the RFC allows |
 | `max-age=0` | Same as absent | Browsers delete the entry, so the site has no HSTS. It is the documented way to turn HSTS off, so it may be deliberate; either way the other directives are not reported, since there is no policy left for them to qualify |
-| `max-age` < threshold *(default: 31536000s / 1 year)* | MEDIUM | Short values reduce protection window against SSL-stripping |
+| `max-age` < threshold *(default: 63072000s / 2 years)* | MEDIUM | OWASP recommends 2 years |
 | `includeSubDomains` missing *(configurable)* | MEDIUM | A plaintext channel on any host under the domain reaches the protected site's cookies — see below |
 | `preload`, declared or not *(extended profile only)* | ? LOW | Whether the domain is on the preload list is a separate fact the response cannot show — see below |
 
@@ -255,7 +255,7 @@ only when a profile opts in.
 Threshold values are configurable in the profile:
 ```yaml
 Strict-Transport-Security:
-  min_max_age: 31536000          # basic profile
+  min_max_age: 63072000          # OWASP recommended: 2 years
   require_include_subdomains: true
   require_preload: false         # true in extended profile
 ```

@@ -57,7 +57,7 @@ PP_CLOSED = ", ".join(f"{feature}=()" for feature in PP_TRACKING + PP_ONE_CLICK)
 CLEAN_HEADERS = [
     "Content-Security-Policy: default-src 'none'; script-src 'self'; object-src 'none'; "
     "base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests",
-    "Strict-Transport-Security: max-age=31536000; includeSubDomains",
+    "Strict-Transport-Security: max-age=63072000; includeSubDomains",
     "X-Frame-Options: DENY",
     "X-Content-Type-Options: nosniff",
     "Cross-Origin-Opener-Policy: same-origin",
